@@ -8,8 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.n.ui.screens.AuthScreen
-import com.example.n.ui.screens.FlashcardScreen
+import com.example.n.ui.screens.HomeScreen
+import com.example.n.viewmodel.AuthViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,22 +22,29 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Biến trạng thái: Mặc định lúc mới mở app là false (chưa đăng nhập)
-                    var isLoggedIn by remember { mutableStateOf(false) }
+                    // Dùng chung 1 ViewModel cho cả MainActivity để quản lý trạng thái
+                    val authViewModel: AuthViewModel = viewModel()
 
-                    // Bộ định tuyến (Router) đơn giản
+                    // Lắng nghe biến loginSuccess từ ViewModel
+                    val isLoggedIn by authViewModel.loginSuccess.collectAsState()
+
+                    // Bộ định tuyến (Router)
                     if (!isLoggedIn) {
                         // Nếu chưa đăng nhập -> Hiện màn hình Đăng Nhập
                         AuthScreen(
+                            viewModel = authViewModel,
                             onLoginSuccess = {
-                                // Khi hàm login() trong ViewModel chạy thành công,
-                                // nó sẽ báo ra đây và ta đổi biến này thành true
-                                isLoggedIn = true
+                                // Không cần gán biến gì ở đây vì ViewModel đã tự set loginSuccess = true rồi
                             }
                         )
                     } else {
-                        // Nếu isLoggedIn == true -> Hiện màn hình Flashcard
-                        FlashcardScreen()
+                        // Nếu đã đăng nhập -> Hiện Trang Chủ
+                        HomeScreen(
+                            onLogout = {
+                                // Gọi hàm logout bên ViewModel để đẩy user ra ngoài
+                                authViewModel.logout()
+                            }
+                        )
                     }
                 }
             }
