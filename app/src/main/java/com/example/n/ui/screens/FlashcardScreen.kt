@@ -5,6 +5,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+// 2 DÒNG NÀY SẼ FIX LỖI "GETVALUE":
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,19 +17,16 @@ import com.example.n.viewmodel.FlashcardViewModel
 
 @Composable
 fun FlashcardScreen(viewModel: FlashcardViewModel = viewModel()) {
-    // Quan sát dữ liệu từ ViewModel
+    // Quan sát dữ liệu từ ViewModel (Nhờ 2 dòng import trên mà code này sẽ hết đỏ)
     val flashcards by viewModel.flashcards.collectAsState()
     val currentIndex by viewModel.currentIndex.collectAsState()
 
-    // Trạng thái lật thẻ (giữ tại UI vì BE không cần quan tâm thẻ đang lật hay không)
     var isFlipped by remember { mutableStateOf(false) }
 
-    // Tự động lật thẻ về mặt trước mỗi khi chuyển sang thẻ mới
     LaunchedEffect(currentIndex) {
         isFlipped = false
     }
 
-    // Trường hợp danh sách rỗng
     if (flashcards.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Danh sách thẻ trống!")
@@ -41,14 +41,12 @@ fun FlashcardScreen(viewModel: FlashcardViewModel = viewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Hiển thị tiến độ học
         Text(
             text = "Thẻ ${currentIndex + 1} / ${flashcards.size}",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        // Hiển thị thẻ Flashcard
         FlashcardItem(
             card = flashcards[currentIndex],
             isFlipped = isFlipped,
@@ -57,7 +55,6 @@ fun FlashcardScreen(viewModel: FlashcardViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Hàng chứa các nút điều hướng
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween

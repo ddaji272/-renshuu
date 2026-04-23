@@ -1,25 +1,46 @@
 package com.example.n.ui.screens
 
+import androidx.compose.foundation.clickable // THÊM IMPORT ĐỂ BẤM ĐƯỢC
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.n.viewmodel.FlashcardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onLogout: () -> Unit // Hàm gọi khi bấm nút Đăng xuất
+    token: String,
+    flashcardViewModel: FlashcardViewModel = viewModel(),
+    onLogout: () -> Unit,
+    // THÊM: Lệnh chuyển trang khi bấm vào bộ bài
+    onDeckClick: (com.example.n.network.DeckResponse) -> Unit
 ) {
+    val decks by flashcardViewModel.decks.collectAsState()
+    val isLoading by flashcardViewModel.isLoading.collectAsState()
+
+    var showDialog by remember { mutableStateOf(false) }
+    var deckName by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        if (token.isNotEmpty()) {
+            flashcardViewModel.fetchDecks(token)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -31,7 +52,6 @@ fun HomeScreen(
                     titleContentColor = MaterialTheme.colorScheme.primary,
                 ),
                 actions = {
-                    // Nút Đăng xuất ở góc phải trên cùng
                     IconButton(onClick = onLogout) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ExitToApp,
@@ -43,16 +63,14 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            // Nút dấu + nổi bật để tạo Flashcard mới
             FloatingActionButton(
-                onClick = { /* TODO: Chuyển sang màn hình tạo Deck */ },
+                onClick = { showDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Tạo bộ bài mới", tint = Color.White)
             }
         }
     ) { paddingValues ->
-        // Nội dung chính của Trang chủ
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -69,11 +87,8 @@ fun HomeScreen(
             }
 
             item {
-                // Một cái Card hiển thị tiến độ học tập (Mockup tạm)
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -84,7 +99,7 @@ fun HomeScreen(
                         Text("Tiến độ hôm nay", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("🔥 Đã ôn tập: 0/20 từ vựng", fontSize = 16.sp)
-                        Text("📚 Bộ bài của bạn: 0", fontSize = 16.sp)
+                        Text("📚 Bộ bài của bạn: ${decks.size}", fontSize = 16.sp)
                     }
                 }
             }
@@ -99,33 +114,89 @@ fun HomeScreen(
                 )
             }
 
-            // Giao diện giữ chỗ (Placeholder) cho các bộ bài sau này
-            items(3) { index ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            if (isLoading && decks.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                    }
+                }
+            } else if (decks.isEmpty()) {
+                item {
+                    Text(
+                        "Bạn chưa có bộ bài nào. Hãy bấm nút + để tạo nhé!",
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            } else {
+                items(decks) { deck ->
+                    Card(
+                        // SỬA: Thêm modifier .clickable để bấm được vào từng bộ bài
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable { onDeckClick(deck) },
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
                     ) {
-                        Box(
-                            modifier = Modifier.size(50.dp),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("🗂️", fontSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text("Bộ bài mẫu ${index + 1}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("0 từ vựng", color = Color.Gray, fontSize = 14.sp)
+                            Box(modifier = Modifier.size(50.dp), contentAlignment = Alignment.Center) {
+                                Text("🗂️", fontSize = 24.sp)
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(deck.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                // Sửa lại dòng text cho đúng trải nghiệm
+                                Text("Click để xem và thêm thẻ", color = Color.Gray, fontSize = 12.sp)
+                            }
+
+                            IconButton(
+                                onClick = { flashcardViewModel.deleteDeck(token, deck._id) }
+                            ) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Xóa", tint = Color.Red)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Tạo bộ bài mới", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = deckName,
+                    onValueChange = { deckName = it },
+                    label = { Text("Tên bộ bài (VD: N5 Kanji)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (deckName.isNotBlank()) {
+                            flashcardViewModel.createDeck(token, deckName)
+                            showDialog = false
+                            deckName = ""
+                        }
+                    }
+                ) {
+                    Text("Tạo mới")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Hủy", color = Color.Gray)
+                }
+            }
+        )
     }
 }

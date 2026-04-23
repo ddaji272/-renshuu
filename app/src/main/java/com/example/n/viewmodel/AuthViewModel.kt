@@ -27,12 +27,18 @@ class AuthViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // THÊM: Biến chứa thông báo thành công (ví dụ: gửi email quên pass thành công)
+    // Biến chứa thông báo thành công (ví dụ: gửi email quên pass thành công)
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
     private val _loginSuccess = MutableStateFlow(false)
     val loginSuccess: StateFlow<Boolean> = _loginSuccess.asStateFlow()
+
+    // ================================================================
+    // THÊM MỚI QUAN TRỌNG: Biến lưu Token để giao cho MainActivity cất vào Két
+    // ================================================================
+    private val _accessToken = MutableStateFlow<String?>(null)
+    val accessToken: StateFlow<String?> = _accessToken.asStateFlow()
 
     fun login(email: String, pass: String) {
         if (email.isBlank() && pass.isBlank()) {
@@ -56,6 +62,10 @@ class AuthViewModel : ViewModel() {
             try {
                 val request = LoginRequest(email, pass)
                 val response = RetrofitClient.apiService.loginUser(request)
+
+                // Gán Token lấy được từ Server vào biến
+                _accessToken.value = response.accessToken
+
                 println("Đăng nhập thành công! Token: ${response.accessToken}")
                 _loginSuccess.value = true
             } catch (e: HttpException) {
@@ -90,7 +100,7 @@ class AuthViewModel : ViewModel() {
                 val request = RegisterRequest(email, pass)
                 val response = RetrofitClient.apiService.registerUser(request)
 
-                // CẬP NHẬT: Báo thành công và KHÔNG tự động đăng nhập nữa
+                // Báo thành công và KHÔNG tự động đăng nhập nữa
                 _successMessage.value = "🎉 Đăng ký thành công! Vui lòng đăng nhập để tiếp tục."
 
             } catch (e: HttpException) {
@@ -107,7 +117,7 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    // THÊM: Tính năng Quên mật khẩu
+    // Tính năng Quên mật khẩu
     fun forgotPassword(email: String) {
         if (email.isBlank()) {
             _errorMessage.value = "Vui lòng nhập email của bạn vào ô trên để reset mật khẩu!"
@@ -133,7 +143,7 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    // THÊM: Tính năng Đăng xuất
+    // Tính năng Đăng xuất
     fun logout() {
         viewModelScope.launch {
             try {
@@ -141,6 +151,7 @@ class AuthViewModel : ViewModel() {
             } catch (e: Exception) {
                 println("Lỗi logout server, tiến hành logout local")
             } finally {
+                _accessToken.value = null // Xóa Token nội bộ
                 _loginSuccess.value = false // Đẩy user ra khỏi màn hình chính
             }
         }
@@ -171,6 +182,8 @@ class AuthViewModel : ViewModel() {
                 if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                     val idToken = googleIdTokenCredential.idToken
+
+                    _accessToken.value = idToken // Cất Token của Google
                     println("Lấy Token Google thành công: $idToken")
                     _loginSuccess.value = true
                 }
