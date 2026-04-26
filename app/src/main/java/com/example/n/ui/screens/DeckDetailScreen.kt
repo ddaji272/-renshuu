@@ -41,22 +41,23 @@ fun DeckDetailScreen(
     onBack: () -> Unit
 ) {
     val cards by viewModel.cards.collectAsState()
+
+    // Lấy biến loading từ ViewModel để biết khi nào đang gọi API
+    val isLoading by viewModel.isLoading.collectAsState()
+
     var showDialog by remember { mutableStateOf(false) }
 
-    // THÊM: Các biến cho thẻ Premium
     var frontText by remember { mutableStateOf("") }
     var backText by remember { mutableStateOf("") }
-    var cardType by remember { mutableStateOf("TEXT") } // TEXT, IMAGE, TOUCH
+    var cardType by remember { mutableStateOf("TEXT") }
     var expandedDropdown by remember { mutableStateOf(false) }
 
-    // THÊM: Biến cho Ảnh
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri -> selectedImageUri = uri }
     )
 
-    // THÊM: Biến cho Touch Recall (Canvas vẽ tay)
     var drawPath by remember { mutableStateOf(Path()) }
 
     LaunchedEffect(deck._id) {
@@ -93,7 +94,6 @@ fun DeckDetailScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("💡 Đáp án: ${card.back}", color = Color.DarkGray)
 
-                                // Hiển thị loại thẻ mờ mờ ở dưới
                                 Text("Loại: ${card.type ?: "TEXT"}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             }
                             IconButton(onClick = { viewModel.deleteCard(token, card._id) }) {
@@ -114,7 +114,6 @@ fun DeckDetailScreen(
             onDismissRequest = { showDialog = false },
             title = { Text("Tạo Thẻ Mới", fontWeight = FontWeight.ExtraBold) },
             text = {
-                // Thêm scroll để không bị tràn màn hình khi mở tính năng Vẽ
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
 
                     // 1. CHỌN LOẠI THẺ
@@ -154,7 +153,7 @@ fun DeckDetailScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 3. MẶT SAU (TÙY THEO LOẠI THẺ MÀ HIỂN THỊ KHÁC NHAU)
+                    // 3. MẶT SAU
                     when (cardType) {
                         "TEXT" -> {
                             OutlinedTextField(
@@ -185,7 +184,6 @@ fun DeckDetailScreen(
                             Text("Touch Recall (Bút Tích)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                             Text("Dùng tay viết đáp án vào ô dưới đây:", fontSize = 12.sp, color = Color.Gray)
 
-                            // VÙNG VẼ TAY CẢM ỨNG XỊN XÒ
                             Box(modifier = Modifier
                                 .fillMaxWidth()
                                 .height(150.dp)
@@ -204,10 +202,8 @@ fun DeckDetailScreen(
                                     drawPath(path = drawPath, color = Color.Black, style = Stroke(width = 8f))
                                 }
                             }
-                            // Nút xóa nét vẽ
                             TextButton(onClick = { drawPath = Path() }) { Text("Xóa nháp") }
 
-                            // Vẫn cần chỗ lưu kết quả chuẩn để hệ thống chấm điểm
                             OutlinedTextField(
                                 value = backText,
                                 onValueChange = { backText = it },
@@ -219,17 +215,22 @@ fun DeckDetailScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (frontText.isNotBlank() && backText.isNotBlank()) {
-                        val imgUrl = selectedImageUri?.toString()
-
-                        // ĐÃ SỬA: Gọi đúng hàm addCard với đầy đủ tham số của bản Premium
-                        viewModel.addCard(token, deck._id, frontText, backText, cardType, imgUrl, "CanvasData") {
-                            showDialog = false
-                            frontText = ""; backText = ""; selectedImageUri = null; drawPath = Path() // Reset
+                Button(
+                    onClick = {
+                        if (frontText.isNotBlank() && backText.isNotBlank()) {
+                            val imgUrl = selectedImageUri?.toString()
+                            viewModel.addCard(token, deck._id, frontText, backText, cardType, imgUrl, "CanvasData") {
+                                showDialog = false
+                                frontText = ""; backText = ""; selectedImageUri = null; drawPath = Path() // Reset
+                            }
                         }
-                    }
-                }) { Text("Lưu tuyệt tác") }
+                    },
+                    // THÊM: Khóa nút khi đang load để tránh bấm nhiều lần
+                    enabled = !isLoading
+                ) {
+                    // THÊM: Đổi chữ khi đang đợi Server và Cập nhật lại tên nút theo ý bạn
+                    Text(if (isLoading) "Đang lưu..." else "Lưu thẻ")
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) { Text("Hủy") }

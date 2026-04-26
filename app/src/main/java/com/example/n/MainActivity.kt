@@ -11,11 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.n.ui.screens.AuthScreen
-import com.example.n.ui.screens.DeckDetailScreen // THÊM: Import màn hình Thẻ
+import com.example.n.ui.screens.DeckDetailScreen
 import com.example.n.ui.screens.HomeScreen
+import com.example.n.ui.screens.StudyScreen // THÊM: Import màn hình Học
 import com.example.n.utils.TokenManager
 import com.example.n.viewmodel.AuthViewModel
-import com.example.n.viewmodel.FlashcardViewModel // THÊM: Import Bộ não Flashcard
+import com.example.n.viewmodel.FlashcardViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,9 +42,10 @@ class MainActivity : ComponentActivity() {
                     val newToken by authViewModel.accessToken.collectAsState()
 
                     // =======================================================
-                    // THÊM: Biến theo dõi xem user đang bấm vào Bộ bài nào
+                    // Biến theo dõi trạng thái điều hướng
                     // =======================================================
                     var selectedDeck by remember { mutableStateOf<com.example.n.network.DeckResponse?>(null) }
+                    var isStudying by remember { mutableStateOf(false) } // THÊM: Công tắc bật chế độ Học
 
                     // 2. Khi có chìa khóa mới -> Cất ngay vào két
                     LaunchedEffect(newToken) {
@@ -54,7 +56,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // =======================================================
-                    // BỘ ĐỊNH TUYẾN (ROUTER) ĐÃ ĐƯỢC NÂNG CẤP
+                    // BỘ ĐỊNH TUYẾN (ROUTER) ĐÃ ĐƯỢC NÂNG CẤP FULL GIÁP
                     // =======================================================
                     if (currentToken == null && !loginSuccess) {
                         // CHƯA ĐĂNG NHẬP -> Hiện màn hình Đăng Nhập
@@ -63,17 +65,27 @@ class MainActivity : ComponentActivity() {
                             onLoginSuccess = { /* Tự động xử lý */ }
                         )
                     } else {
-                        // ĐÃ ĐĂNG NHẬP -> Kiểm tra xem user muốn đi đâu
-                        if (selectedDeck != null) {
-                            // NẾU ĐANG CHỌN BỘ BÀI -> Hiện màn hình Chi tiết Thẻ
+                        // ĐÃ ĐĂNG NHẬP -> Phân luồng giao thông
+                        if (isStudying && selectedDeck != null) {
+                            // 1. NẾU BẬT CÔNG TẮC HỌC -> Vào phòng tập (StudyScreen)
+                            StudyScreen(
+                                token = currentToken ?: "",
+                                viewModel = flashcardViewModel,
+                                onFinish = {
+                                    isStudying = false // Tắt công tắc học
+                                    selectedDeck = null // Trả về màn hình chính
+                                }
+                            )
+                        } else if (selectedDeck != null) {
+                            // 2. NẾU CHỈ BẤM VÀO THÂN BỘ BÀI -> Vào phòng quản lý thẻ (DeckDetailScreen)
                             DeckDetailScreen(
                                 token = currentToken ?: "",
                                 deck = selectedDeck!!,
                                 viewModel = flashcardViewModel,
-                                onBack = { selectedDeck = null } // Bấm mũi tên Back thì set về null để về Home
+                                onBack = { selectedDeck = null } // Bấm mũi tên Back thì về Home
                             )
                         } else {
-                            // NẾU CHƯA CHỌN BỘ BÀI -> Hiện Trang Chủ
+                            // 3. NẾU CHƯA CHỌN GÌ -> Đứng ở sảnh chính (HomeScreen)
                             HomeScreen(
                                 token = currentToken ?: "",
                                 flashcardViewModel = flashcardViewModel,
@@ -81,10 +93,16 @@ class MainActivity : ComponentActivity() {
                                     authViewModel.logout()
                                     tokenManager.clearToken()
                                     currentToken = null
-                                    selectedDeck = null // Reset trạng thái chọn bài
+                                    selectedDeck = null
+                                    isStudying = false
                                 },
                                 onDeckClick = { deck ->
-                                    selectedDeck = deck // Bấm vào bộ bài nào thì gán vào đây để mở màn hình Thẻ
+                                    selectedDeck = deck // Bấm vào thân bộ bài -> Mở quản lý thẻ
+                                },
+                                onStudyClick = { deck ->
+                                    selectedDeck = deck
+                                    isStudying = true // Bấm nút Play -> Bật công tắc học
+                                    flashcardViewModel.fetchStudyCards(currentToken ?: "", deck._id) // Ra lệnh tải bài về học
                                 }
                             )
                         }

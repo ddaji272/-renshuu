@@ -1,6 +1,6 @@
 package com.example.n.ui.screens
 
-import androidx.compose.foundation.clickable // THÊM IMPORT ĐỂ BẤM ĐƯỢC
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow // THÊM IMPORT ICON PLAY
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,8 +27,9 @@ fun HomeScreen(
     token: String,
     flashcardViewModel: FlashcardViewModel = viewModel(),
     onLogout: () -> Unit,
-    // THÊM: Lệnh chuyển trang khi bấm vào bộ bài
-    onDeckClick: (com.example.n.network.DeckResponse) -> Unit
+    onDeckClick: (com.example.n.network.DeckResponse) -> Unit,
+    // THÊM: Lệnh chuyển sang màn hình Học
+    onStudyClick: (com.example.n.network.DeckResponse) -> Unit
 ) {
     val decks by flashcardViewModel.decks.collectAsState()
     val isLoading by flashcardViewModel.isLoading.collectAsState()
@@ -131,7 +133,6 @@ fun HomeScreen(
             } else {
                 items(decks) { deck ->
                     Card(
-                        // SỬA: Thêm modifier .clickable để bấm được vào từng bộ bài
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
@@ -150,10 +151,17 @@ fun HomeScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(deck.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                // Sửa lại dòng text cho đúng trải nghiệm
                                 Text("Click để xem và thêm thẻ", color = Color.Gray, fontSize = 12.sp)
                             }
 
+                            // NÚT HỌC NGAY
+                            IconButton(
+                                onClick = { onStudyClick(deck) }
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = "Học ngay", tint = Color(0xFF4CAF50))
+                            }
+
+                            // NÚT XÓA
                             IconButton(
                                 onClick = { flashcardViewModel.deleteDeck(token, deck._id) }
                             ) {

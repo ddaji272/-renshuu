@@ -1,5 +1,6 @@
 package com.example.n.network
 
+import com.google.gson.annotations.SerializedName
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -15,8 +16,7 @@ import java.util.concurrent.TimeUnit
 // ==========================================
 // 1. CÁC LỚP DỮ LIỆU (DATA CLASSES)
 // ==========================================
-
-// --- Auth ---
+// Auth
 data class UserInfo(val id: String, val email: String)
 data class LoginRequest(val email: String, val password: String)
 data class LoginResponse(val accessToken: String, val message: String, val user: UserInfo?)
@@ -26,21 +26,20 @@ data class ForgotPasswordRequest(val email: String)
 data class ForgotPasswordResponse(val message: String)
 data class GeneralResponse(val message: String)
 
-// --- Deck & Card ---
+// Deck & Card
 data class DeckRequest(val name: String)
 data class DeckResponse(val _id: String, val name: String)
 
-// ĐÃ CẬP NHẬT: CardRequest giờ đã mang sức mạnh Premium (Vẽ tay, Hình ảnh, Loại thẻ)
+// CardRequest: Có Bùa chú SerializedName để tự động dịch sang chuẩn Backend
 data class CardRequest(
-    val deckId: String,
+    @SerializedName("deckID") val deckId: String,
     val front: String,
     val back: String,
     val type: String = "TEXT",     // Loại thẻ: TEXT, IMAGE, TOUCH
-    val imageUrl: String? = null,  // Link ảnh nếu có
-    val drawData: String? = null   // Dữ liệu nét vẽ cảm ứng
+    @SerializedName("image") val imageUrl: String? = null,
+    val drawData: String? = null
 )
 
-// Cập nhật CardResponse để có thể đọc được type từ Backend trả về
 data class CardResponse(
     val _id: String,
     val front: String,
@@ -49,6 +48,9 @@ data class CardResponse(
     val imageUrl: String? = null,
     val drawData: String? = null
 )
+
+// ĐÃ SỬA: Đổi tên biến thành "rating" để Backend hiểu (0-Again, 1-Hard, 2-Good, 3-Easy)
+data class ReviewRequest(val rating: Int)
 
 
 // ==========================================
@@ -105,6 +107,17 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("deckId") deckId: String
     ): List<CardResponse>
+
+    // ==========================================
+    // --- STUDY ROUTES (FSRS / SM-2) ---
+    // ==========================================
+    // ĐÃ SỬA: URL trỏ vào đúng studyRoutes và nối ID thẻ trực tiếp lên thanh URL
+    @POST("/api/study/review/{id}")
+    suspend fun reviewCard(
+        @Header("Authorization") token: String,
+        @Path("id") cardId: String,
+        @Body request: ReviewRequest
+    ): GeneralResponse
 }
 
 

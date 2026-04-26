@@ -8,13 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
 class FlashcardViewModel : ViewModel() {
 
-    // ==========================================
-    // 1. TÍNH NĂNG LẬT THẺ (CŨ - ĐỂ SCREEN CHẠY ĐƯỢC)
-    // ==========================================
-
+    // 1. TÍNH NĂNG LẬT THẺ (ĐỂ SCREEN CHẠY ĐƯỢC)
     private val _flashcards = MutableStateFlow<List<Flashcard>>(emptyList())
     val flashcards: StateFlow<List<Flashcard>> = _flashcards.asStateFlow()
 
@@ -32,11 +28,7 @@ class FlashcardViewModel : ViewModel() {
             _currentIndex.value -= 1
         }
     }
-
-    // ==========================================
     // 2. QUẢN LÝ BỘ BÀI (DECK)
-    // ==========================================
-
     private val _decks = MutableStateFlow<List<DeckResponse>>(emptyList())
     val decks: StateFlow<List<DeckResponse>> = _decks.asStateFlow()
 
@@ -84,10 +76,7 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // ==========================================
     // 3. QUẢN LÝ THẺ (CARD) BÊN TRONG BỘ BÀI
-    // ==========================================
-
     private val _cards = MutableStateFlow<List<CardResponse>>(emptyList())
     val cards: StateFlow<List<CardResponse>> = _cards.asStateFlow()
 
@@ -142,6 +131,47 @@ class FlashcardViewModel : ViewModel() {
                 println("Xóa thẻ thành công!")
             } catch (e: Exception) {
                 println("Lỗi xóa thẻ: ${e.message}")
+            }
+        }
+    }
+    // Danh sách thẻ dành riêng cho việc ôn tập
+    private val _studyCards = MutableStateFlow<List<CardResponse>>(emptyList())
+    val studyCards: StateFlow<List<CardResponse>> = _studyCards.asStateFlow()
+
+    private val _studyIndex = MutableStateFlow(0)
+    val studyIndex: StateFlow<Int> = _studyIndex.asStateFlow()
+
+    // Lấy danh sách thẻ cần học hôm nay
+    fun fetchStudyCards(token: String, deckId: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val response = RetrofitClient.apiService.getCardsByDeck("Bearer $token", deckId)
+                // Sau này sẽ lọc theo ngày ôn tập từ Backend, tạm thời lấy hết để test
+                _studyCards.value = response
+                _studyIndex.value = 0
+            } catch (e: Exception) {
+                println("Lỗi tải thẻ học: ${e.message}")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // Gửi kết quả (0-Again, 1-Hard, 2-Good, 3-Easy)
+    fun submitReview(token: String, cardId: String, rating: Int) {
+        viewModelScope.launch {
+            try {
+                // Sửa thành rating
+                RetrofitClient.apiService.reviewCard("Bearer $token", cardId, ReviewRequest(rating))
+                // Chuyển sang thẻ tiếp theo
+                if (_studyIndex.value < _studyCards.value.size - 1) {
+                    _studyIndex.value += 1
+                } else {
+                    _studyCards.value = emptyList() // Đã hoàn thành bộ bài
+                }
+            } catch (e: Exception) {
+                println("Lỗi gửi review: ${e.message}")
             }
         }
     }
