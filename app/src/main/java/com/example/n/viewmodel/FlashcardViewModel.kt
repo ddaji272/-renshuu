@@ -107,15 +107,26 @@ class FlashcardViewModel : ViewModel() {
     }
 
     // Thêm thẻ mới
-    fun addCard(token: String, deckId: String, front: String, back: String, onSuccess: () -> Unit = {}) {
+    fun addCard(
+        token: String,
+        deckId: String,
+        front: String,
+        back: String,
+        type: String,         // Thêm loại
+        imageUrl: String?,    // Thêm ảnh
+        drawData: String?,    // Thêm nét vẽ
+        onSuccess: () -> Unit = {}
+    ) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val response = RetrofitClient.apiService.createCard("Bearer $token", CardRequest(deckId, front, back))
-                _cards.value = _cards.value + response // Cập nhật UI có thẻ mới ngay lập tức
+                // Gói toàn bộ dữ liệu xịn xò này gửi lên Backend
+                val request = CardRequest(deckId, front, back, type, imageUrl, drawData)
+                val response = RetrofitClient.apiService.createCard("Bearer $token", request)
+                _cards.value = _cards.value + response
                 onSuccess()
             } catch (e: Exception) {
-                println("Lỗi thêm thẻ: ${e.message}")
+                println("Lỗi thêm thẻ pro: ${e.message}")
             } finally {
                 _isLoading.value = false
             }

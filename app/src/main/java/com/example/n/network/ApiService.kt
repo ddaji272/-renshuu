@@ -4,12 +4,12 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
-import retrofit2.http.DELETE // THÊM: Import thư viện Xóa
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
-import retrofit2.http.Path   // THÊM: Import thư viện truyền ID
+import retrofit2.http.Path
 import java.util.concurrent.TimeUnit
 
 // ==========================================
@@ -29,8 +29,26 @@ data class GeneralResponse(val message: String)
 // --- Deck & Card ---
 data class DeckRequest(val name: String)
 data class DeckResponse(val _id: String, val name: String)
-data class CardRequest(val deckId: String, val front: String, val back: String)
-data class CardResponse(val _id: String, val front: String, val back: String)
+
+// ĐÃ CẬP NHẬT: CardRequest giờ đã mang sức mạnh Premium (Vẽ tay, Hình ảnh, Loại thẻ)
+data class CardRequest(
+    val deckId: String,
+    val front: String,
+    val back: String,
+    val type: String = "TEXT",     // Loại thẻ: TEXT, IMAGE, TOUCH
+    val imageUrl: String? = null,  // Link ảnh nếu có
+    val drawData: String? = null   // Dữ liệu nét vẽ cảm ứng
+)
+
+// Cập nhật CardResponse để có thể đọc được type từ Backend trả về
+data class CardResponse(
+    val _id: String,
+    val front: String,
+    val back: String,
+    val type: String? = "TEXT",
+    val imageUrl: String? = null,
+    val drawData: String? = null
+)
 
 
 // ==========================================
@@ -63,7 +81,6 @@ interface ApiService {
         @Header("Authorization") token: String
     ): List<DeckResponse>
 
-    // THÊM: Lệnh gọi Server xóa Deck theo ID
     @DELETE("/api/deck/{id}")
     suspend fun deleteDeck(
         @Header("Authorization") token: String,
@@ -77,14 +94,13 @@ interface ApiService {
         @Body request: CardRequest
     ): CardResponse
 
-    // THÊM: Lệnh gọi Server xóa Card theo ID
     @DELETE("/api/card/{id}")
     suspend fun deleteCard(
         @Header("Authorization") token: String,
         @Path("id") cardId: String
     ): GeneralResponse
-    // (THÊM DÒNG NÀY VÀO PHẦN CARD ROUTES CỦA ApiService)
-    @GET("/api/card/{deckId}") // Lưu ý: Hãy check lại Backend xem route lấy danh sách card theo deckId của bạn ghi như thế nào nhé!
+
+    @GET("/api/card/{deckId}")
     suspend fun getCardsByDeck(
         @Header("Authorization") token: String,
         @Path("deckId") deckId: String
