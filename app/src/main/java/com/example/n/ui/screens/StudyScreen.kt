@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.n.network.CardResponse
 import com.example.n.viewmodel.FlashcardViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -62,14 +61,14 @@ fun StudyScreen(
     var showSwipeHint by remember { mutableStateOf(false) }
     var hasSeenHint by remember { mutableStateOf(false) }
 
-    // Tính toán độ rõ nét của "Nhãn dán" (Stamps) dựa trên lực vuốt
-    val rightSwipeAlpha = (offsetX / 150f).coerceIn(0f, 1f) // Điểm TỐT
-    val leftSwipeAlpha = (-offsetX / 150f).coerceIn(0f, 1f) // Điểm LẶP LẠI
+    // Tính toán độ rõ nét của Nhãn dán dựa trên lực vuốt
+    val rightSwipeAlpha = (offsetX / 150f).coerceIn(0f, 1f) // Vuốt PHẢI -> TỐT
+    val leftSwipeAlpha = (-offsetX / 150f).coerceIn(0f, 1f) // Vuốt TRÁI -> LẶP LẠI
 
     LaunchedEffect(isFlipped) {
         if (isFlipped && !hasSeenHint) {
             showSwipeHint = true
-            delay(4000)
+            delay(3000) // Rút ngắn thời gian hiện hướng dẫn xuống 3s cho đỡ vướng
             showSwipeHint = false
             hasSeenHint = true
         } else if (!isFlipped) {
@@ -149,216 +148,236 @@ fun StudyScreen(
                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
 
+                // =================================================================
+                // LỚP 1: XỬ LÝ VUỐT (Chịu trách nhiệm di chuyển thẻ theo tay)
+                // =================================================================
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(420.dp),
+                        .height(420.dp)
+                        .offset { IntOffset(offsetX.roundToInt(), 0) } // Di chuyển ngang
+                        .graphicsLayer {
+                            rotationZ = offsetX / 25f // Xoay nghiêng thẻ khi vuốt
+                        }
+                        .pointerInput(isFlipped) {
+                            if (isFlipped) {
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (offsetX > 150f) {
+                                            // VUỐT PHẢI -> Gửi điểm 2 (Tốt)
+                                            viewModel.submitReview(token, currentCard._id, 2)
+                                            isFlipped = false
+                                        } else if (offsetX < -150f) {
+                                            // VUỐT TRÁI -> Gửi điểm 0 (Lặp lại)
+                                            viewModel.submitReview(token, currentCard._id, 0)
+                                            isFlipped = false
+                                        } else {
+                                            offsetX = 0f // Trả về giữa nếu vuốt nhẹ
+                                        }
+                                    }
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    offsetX += dragAmount
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
+                    // =================================================================
+                    // LỚP 2: XỬ LÝ LẬT 3D VÀ GIAO DIỆN THẺ
+                    // =================================================================
+                    Card(
                         modifier = Modifier
                             .fillMaxSize()
-                            .offset { IntOffset(offsetX.roundToInt(), 0) }
                             .graphicsLayer {
                                 rotationY = rotation
                                 cameraDistance = 12f * density
-                                rotationZ = offsetX / 25f
                             }
-                            // Bấm lật 2 chiều vô tư
-                            .clickable { isFlipped = !isFlipped }
-                            .pointerInput(isFlipped) {
-                                if (isFlipped) {
-                                    detectHorizontalDragGestures(
-                                        onDragEnd = {
-                                            if (offsetX > 200f) {
-                                                viewModel.submitReview(token, currentCard._id, 2)
-                                                isFlipped = false
-                                            } else if (offsetX < -200f) {
-                                                viewModel.submitReview(token, currentCard._id, 0)
-                                                isFlipped = false
-                                            } else {
-                                                offsetX = 0f
+                            .clickable { isFlipped = !isFlipped },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer
+                            else MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(8.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            if (rotation <= 90f) {
+                                // ---------------- MẶT TRƯỚC ----------------
+                                IconButton(
+                                    onClick = { handleSpeech(currentCard.front, currentCard.sound, tts != null) },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
+                                }
+
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = currentCard.front,
+                                        fontSize = 32.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(bottom = 24.dp)
+                                    )
+
+                                    Text("✍️ Bảng nháp viết chữ:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(180.dp)
+                                            .padding(top = 4.dp)
+                                            .border(2.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                            .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                    ) {
+                                        Canvas(
+                                            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                                                detectDragGestures(
+                                                    onDragStart = { offset ->
+                                                        scratchPath.moveTo(offset.x, offset.y)
+                                                        scratchTrigger++
+                                                    },
+                                                    onDrag = { change, _ ->
+                                                        scratchPath.lineTo(change.position.x, change.position.y)
+                                                        scratchTrigger++
+                                                    }
+                                                )
                                             }
+                                        ) {
+                                            val trigger = scratchTrigger
+                                            drawPath(path = scratchPath, color = Color.Blue, style = Stroke(width = 8f))
                                         }
-                                    ) { change, dragAmount ->
-                                        change.consume()
-                                        offsetX += dragAmount
                                     }
                                 }
-                            }
-                    ) {
-                        Card(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer
-                                else MaterialTheme.colorScheme.secondaryContainer
-                            ),
-                            elevation = CardDefaults.cardElevation(8.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                                if (rotation <= 90f) {
-                                    // MẶT TRƯỚC
+                            } else {
+                                // ---------------- MẶT SAU ----------------
+                                // Bọc một Box có rotationY = 180f để lật ngược nội dung lại cho xuôi chữ
+                                Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
                                     IconButton(
-                                        onClick = { handleSpeech(currentCard.front, currentCard.sound, tts != null) },
-                                        modifier = Modifier.align(Alignment.TopEnd)
+                                        onClick = { handleSpeech(currentCard.back, currentCard.sound, tts != null) },
+                                        modifier = Modifier.align(Alignment.TopStart)
                                     ) {
                                         Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
                                     }
 
                                     Column(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
+                                        modifier = Modifier.align(Alignment.Center),
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
-                                            text = currentCard.front,
+                                            text = currentCard.back,
                                             fontSize = 32.sp,
                                             fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.padding(bottom = 24.dp)
+                                            textAlign = TextAlign.Center
                                         )
 
-                                        Text("✍️ Bảng nháp viết chữ:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(180.dp)
-                                                .padding(top = 4.dp)
-                                                .border(2.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                                .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                                        ) {
-                                            Canvas(
-                                                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                                                    detectDragGestures(
-                                                        onDragStart = { offset ->
-                                                            scratchPath.moveTo(offset.x, offset.y)
-                                                            scratchTrigger++
-                                                        },
-                                                        onDrag = { change, _ ->
-                                                            scratchPath.lineTo(change.position.x, change.position.y)
-                                                            scratchTrigger++
-                                                        }
-                                                    )
-                                                }
-                                            ) {
-                                                val trigger = scratchTrigger
-                                                drawPath(path = scratchPath, color = Color.Blue, style = Stroke(width = 8f))
-                                            }
+                                        if (!currentCard.imageUrl.isNullOrEmpty()) {
+                                            Spacer(Modifier.height(16.dp))
+                                            AsyncImage(
+                                                model = currentCard.imageUrl,
+                                                contentDescription = "Hình ảnh minh họa",
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(160.dp)
+                                                    .clip(RoundedCornerShape(12.dp)),
+                                                contentScale = ContentScale.Crop
+                                            )
                                         }
                                     }
-                                } else {
-                                    // MẶT SAU
-                                    Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
-                                        IconButton(
-                                            onClick = { handleSpeech(currentCard.back, currentCard.sound, tts != null) },
-                                            modifier = Modifier.align(Alignment.TopStart)
-                                        ) {
-                                            Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
-                                        }
 
-                                        Column(
-                                            modifier = Modifier.align(Alignment.Center),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = currentCard.back,
-                                                fontSize = 32.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                textAlign = TextAlign.Center
-                                            )
+                                    // HIỆU ỨNG NHÃN DÁN (STAMPS)
+                                    if (isFlipped) {
+                                        // Nhãn TỐT (Xanh lá) - Nằm góc trên Trái (Vuốt sang phải sẽ thấy)
+                                        Text(
+                                            text = "TỐT",
+                                            color = Color(0xFF4CAF50),
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .padding(top = 16.dp, start = 8.dp)
+                                                .graphicsLayer {
+                                                    alpha = rightSwipeAlpha
+                                                    rotationZ = -15f
+                                                    scaleX = 1f + (rightSwipeAlpha * 0.2f)
+                                                    scaleY = 1f + (rightSwipeAlpha * 0.2f)
+                                                }
+                                                .border(4.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                        )
 
-                                            if (!currentCard.imageUrl.isNullOrEmpty()) {
-                                                Spacer(Modifier.height(16.dp))
-                                                AsyncImage(
-                                                    model = currentCard.imageUrl,
-                                                    contentDescription = "Hình ảnh minh họa",
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(160.dp)
-                                                        .clip(RoundedCornerShape(12.dp)),
-                                                    contentScale = ContentScale.Crop
-                                                )
+                                        // Nhãn LẶP LẠI (Đỏ) - Nằm góc trên Phải (Vuốt sang trái sẽ thấy)
+                                        Text(
+                                            text = "LẶP LẠI",
+                                            color = Color(0xFFE53935),
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(top = 16.dp, end = 8.dp)
+                                                .graphicsLayer {
+                                                    alpha = leftSwipeAlpha
+                                                    rotationZ = 15f
+                                                    scaleX = 1f + (leftSwipeAlpha * 0.2f)
+                                                    scaleY = 1f + (leftSwipeAlpha * 0.2f)
+                                                }
+                                                .border(4.dp, Color(0xFFE53935), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                        )
+                                    }
+
+                                    // GIAO DIỆN HƯỚNG DẪN VUỐT CHUẨN DESIGN
+                                    val hintAlpha by animateFloatAsState(
+                                        targetValue = if (showSwipeHint) 1f else 0f,
+                                        animationSpec = tween(800),
+                                        label = "HintAlpha"
+                                    )
+
+                                    if (isFlipped && hintAlpha > 0f) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 20.dp, start = 16.dp, end = 16.dp)
+                                                .graphicsLayer { alpha = hintAlpha },
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            // Nút Lặp lại (Vuốt Trái)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .background(Color.White.copy(alpha = 0.6f), RoundedCornerShape(50))
+                                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                                            ) {
+                                                Icon(Icons.Filled.Refresh, contentDescription = null, tint = Color.DarkGray, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("Lặp lại", color = Color.DarkGray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("👈", fontSize = 14.sp)
                                             }
-                                        }
 
-                                        // ===============================================
-                                        // HIỆU ỨNG STAMPS CHUẨN TINDER (NẰM Ở MẶT SAU)
-                                        // ===============================================
-                                        if (isFlipped) {
-                                            // Nhãn TỐT (Xanh lá)
-                                            Text(
-                                                text = "TỐT",
-                                                color = Color(0xFF4CAF50),
-                                                fontSize = 28.sp,
-                                                fontWeight = FontWeight.Black,
+                                            // Nút Tốt (Vuốt Phải)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
-                                                    .align(Alignment.TopStart)
-                                                    .padding(top = 16.dp, start = 8.dp)
-                                                    .graphicsLayer {
-                                                        alpha = rightSwipeAlpha
-                                                        rotationZ = -15f
-                                                        scaleX = 1f + (rightSwipeAlpha * 0.2f)
-                                                        scaleY = 1f + (rightSwipeAlpha * 0.2f)
-                                                    }
-                                                    .border(4.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
-                                                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                                            )
-
-                                            // Nhãn LẶP LẠI (Đỏ)
-                                            Text(
-                                                text = "LẶP LẠI",
-                                                color = Color(0xFFE53935),
-                                                fontSize = 28.sp,
-                                                fontWeight = FontWeight.Black,
-                                                modifier = Modifier
-                                                    .align(Alignment.TopEnd)
-                                                    .padding(top = 16.dp, end = 8.dp)
-                                                    .graphicsLayer {
-                                                        alpha = leftSwipeAlpha
-                                                        rotationZ = 15f
-                                                        scaleX = 1f + (leftSwipeAlpha * 0.2f)
-                                                        scaleY = 1f + (leftSwipeAlpha * 0.2f)
-                                                    }
-                                                    .border(4.dp, Color(0xFFE53935), RoundedCornerShape(8.dp))
-                                                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                                            )
+                                                    .background(Color.White.copy(alpha = 0.6f), RoundedCornerShape(50))
+                                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                                            ) {
+                                                Text("👉", fontSize = 14.sp)
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("Tốt", color = Color.DarkGray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.width(6.dp))
+                                                Icon(Icons.Filled.StarBorder, contentDescription = null, tint = Color.DarkGray, modifier = Modifier.size(18.dp))
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                // ========================================================
-                // HƯỚNG DẪN VUỐT SIÊU TINH TẾ (Nằm ngoài thẻ)
-                // ========================================================
-                val hintAlpha by animateFloatAsState(
-                    targetValue = if (showSwipeHint) 0.6f else 0f,
-                    animationSpec = tween(1000),
-                    label = "HintAlpha"
-                )
-
-                if (hintAlpha > 0f) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp, start = 24.dp, end = 24.dp)
-                            .graphicsLayer { alpha = hintAlpha },
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                            Text("Lặp lại", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Tốt", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(34.dp)) // Giữ chỗ để UI không bị giật khi hint biến mất
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
