@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
 class FlashcardViewModel : ViewModel() {
 
     // 1. TÍNH NĂNG LẬT THẺ (ĐỂ SCREEN CHẠY ĐƯỢC)
@@ -28,6 +29,7 @@ class FlashcardViewModel : ViewModel() {
             _currentIndex.value -= 1
         }
     }
+
     // 2. QUẢN LÝ BỘ BÀI (DECK)
     private val _decks = MutableStateFlow<List<DeckResponse>>(emptyList())
     val decks: StateFlow<List<DeckResponse>> = _decks.asStateFlow()
@@ -104,13 +106,14 @@ class FlashcardViewModel : ViewModel() {
         type: String,         // Thêm loại
         imageUrl: String?,    // Thêm ảnh
         drawData: String?,    // Thêm nét vẽ
+        sound: String? = null,// <-- THÊM BIẾN SOUND VÀO ĐÂY ĐỂ HỨNG DỮ LIỆU TỪ UI
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                // Gói toàn bộ dữ liệu xịn xò này gửi lên Backend
-                val request = CardRequest(deckId, front, back, type, imageUrl, drawData)
+                // Nhét biến sound vào chung gói Request để đẩy lên Backend
+                val request = CardRequest(deckId, front, back, type, imageUrl, drawData, sound)
                 val response = RetrofitClient.apiService.createCard("Bearer $token", request)
                 _cards.value = _cards.value + response
                 onSuccess()
@@ -134,6 +137,7 @@ class FlashcardViewModel : ViewModel() {
             }
         }
     }
+
     // Danh sách thẻ dành riêng cho việc ôn tập
     private val _studyCards = MutableStateFlow<List<CardResponse>>(emptyList())
     val studyCards: StateFlow<List<CardResponse>> = _studyCards.asStateFlow()
@@ -162,7 +166,6 @@ class FlashcardViewModel : ViewModel() {
     fun submitReview(token: String, cardId: String, rating: Int) {
         viewModelScope.launch {
             try {
-                // Sửa thành rating
                 RetrofitClient.apiService.reviewCard("Bearer $token", cardId, ReviewRequest(rating))
                 // Chuyển sang thẻ tiếp theo
                 if (_studyIndex.value < _studyCards.value.size - 1) {

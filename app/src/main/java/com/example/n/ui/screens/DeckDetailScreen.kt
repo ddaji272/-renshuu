@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Audiotrack // <-- IMPORT ICON LOA
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
@@ -41,24 +42,29 @@ fun DeckDetailScreen(
     onBack: () -> Unit
 ) {
     val cards by viewModel.cards.collectAsState()
-
-    // Lấy biến loading từ ViewModel để biết khi nào đang gọi API
     val isLoading by viewModel.isLoading.collectAsState()
 
     var showDialog by remember { mutableStateOf(false) }
-
     var frontText by remember { mutableStateOf("") }
     var backText by remember { mutableStateOf("") }
-    var cardType by remember { mutableStateOf("TEXT") }
-    var expandedDropdown by remember { mutableStateOf(false) }
 
+    // CÔNG CỤ CHỌN ẢNH
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri -> selectedImageUri = uri }
     )
 
-    var drawPath by remember { mutableStateOf(Path()) }
+    // CÔNG CỤ CHỌN FILE ÂM THANH
+    var selectedSoundUri by remember { mutableStateOf<Uri?>(null) }
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri -> selectedSoundUri = uri }
+    )
+
+    // BIẾN CHO VẼ TAY
+    val drawPath = remember { Path() }
+    var pathTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(deck._id) {
         viewModel.fetchCards(token, deck._id)
@@ -94,7 +100,17 @@ fun DeckDetailScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("💡 Đáp án: ${card.back}", color = Color.DarkGray)
 
-                                Text("Loại: ${card.type ?: "TEXT"}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                Row(modifier = Modifier.padding(top = 6.dp)) {
+                                    if (!card.imageUrl.isNullOrEmpty()) {
+                                        Text("🖼️ Có ảnh", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+                                    }
+                                    if (!card.sound.isNullOrEmpty()) {
+                                        Text("🎵 Có âm thanh", color = Color(0xFF9C27B0), fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+                                    }
+                                    if (!card.drawData.isNullOrEmpty() && card.drawData != "null") {
+                                        Text("✍️ Có nét vẽ", color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp)
+                                    }
+                                }
                             }
                             IconButton(onClick = { viewModel.deleteCard(token, card._id) }) {
                                 Icon(Icons.Filled.Delete, "Xóa thẻ", tint = Color.Red)
@@ -106,110 +122,101 @@ fun DeckDetailScreen(
         }
     }
 
-    // ==========================================
-    // DIALOG TẠO THẺ PREMIUM
-    // ==========================================
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("Tạo Thẻ Mới", fontWeight = FontWeight.ExtraBold) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-
-                    // 1. CHỌN LOẠI THẺ
-                    ExposedDropdownMenuBox(
-                        expanded = expandedDropdown,
-                        onExpandedChange = { expandedDropdown = !expandedDropdown }
-                    ) {
-                        OutlinedTextField(
-                            value = when(cardType) {
-                                "TEXT" -> "Nhập phím (Truyền thống)"
-                                "IMAGE" -> "Nhìn ảnh đoán chữ"
-                                "TOUCH" -> "Touch Recall (Vẽ tay)"
-                                else -> "Nhập phím"
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Chế độ học") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(expanded = expandedDropdown, onDismissRequest = { expandedDropdown = false }) {
-                            DropdownMenuItem(text = { Text("Nhập phím (Truyền thống)") }, onClick = { cardType = "TEXT"; expandedDropdown = false })
-                            DropdownMenuItem(text = { Text("Nhìn ảnh đoán chữ") }, onClick = { cardType = "IMAGE"; expandedDropdown = false })
-                            DropdownMenuItem(text = { Text("Touch Recall (Vẽ tay)") }, onClick = { cardType = "TOUCH"; expandedDropdown = false })
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 2. MẶT TRƯỚC (CÂU HỎI)
                     OutlinedTextField(
                         value = frontText,
                         onValueChange = { frontText = it },
                         label = { Text("Câu hỏi / Từ vựng (Mặt trước)") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = backText,
+                        onValueChange = { backText = it },
+                        label = { Text("Đáp án (Mặt sau)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(thickness = 1.dp, color = Color.LightGray)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text("Đính kèm (Tùy chọn)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // NÚT CHỌN ẢNH
+                    Button(
+                        onClick = { photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedImageUri == null) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (selectedImageUri == null) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Filled.Image, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (selectedImageUri == null) "Chọn ảnh từ Thư viện" else "Đã đính kèm 1 ảnh")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // NÚT CHỌN ÂM THANH
+                    Button(
+                        onClick = { audioPickerLauncher.launch("audio/*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedSoundUri == null) MaterialTheme.colorScheme.secondaryContainer else Color(0xFFF3E5F5),
+                            contentColor = if (selectedSoundUri == null) MaterialTheme.colorScheme.onSecondaryContainer else Color(0xFF6A1B9A)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Filled.Audiotrack, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (selectedSoundUri == null) "Chọn File Âm thanh (MP3)" else "Đã đính kèm 1 file Audio")
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 3. MẶT SAU
-                    when (cardType) {
-                        "TEXT" -> {
-                            OutlinedTextField(
-                                value = backText,
-                                onValueChange = { backText = it },
-                                label = { Text("Đáp án (Mặt sau)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        "IMAGE" -> {
-                            Button(
-                                onClick = { photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                            ) {
-                                Icon(Icons.Filled.Image, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(if (selectedImageUri == null) "Chọn ảnh từ Thư viện" else "Đã chọn 1 ảnh")
-                            }
-                            OutlinedTextField(
-                                value = backText,
-                                onValueChange = { backText = it },
-                                label = { Text("Đáp án (Gõ chữ)") },
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                            )
-                        }
-                        "TOUCH" -> {
-                            Text("Touch Recall (Bút Tích)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                            Text("Dùng tay viết đáp án vào ô dưới đây:", fontSize = 12.sp, color = Color.Gray)
-
-                            Box(modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp)
-                                .padding(top = 8.dp)
-                                .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
-                            ) {
-                                Canvas(
-                                    modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                                        detectDragGestures(
-                                            onDragStart = { offset -> drawPath.moveTo(offset.x, offset.y) },
-                                            onDrag = { change, _ -> drawPath.lineTo(change.position.x, change.position.y) }
-                                        )
+                    Text("Ghi chú nét vẽ (Tùy chọn)", fontSize = 13.sp, color = Color.DarkGray)
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .padding(top = 4.dp)
+                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFAFAFA), RoundedCornerShape(12.dp))
+                    ) {
+                        Canvas(
+                            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        drawPath.moveTo(offset.x, offset.y)
+                                        pathTrigger++ // Ép vẽ lại
+                                    },
+                                    onDrag = { change, _ ->
+                                        drawPath.lineTo(change.position.x, change.position.y)
+                                        pathTrigger++ // Ép vẽ lại
                                     }
-                                ) {
-                                    drawPath(path = drawPath, color = Color.Black, style = Stroke(width = 8f))
-                                }
+                                )
                             }
-                            TextButton(onClick = { drawPath = Path() }) { Text("Xóa nháp") }
+                        ) {
+                            val trigger = pathTrigger // Lắng nghe cò súng
+                            drawPath(path = drawPath, color = Color.Black, style = Stroke(width = 8f))
+                        }
+                    }
 
-                            OutlinedTextField(
-                                value = backText,
-                                onValueChange = { backText = it },
-                                label = { Text("Đáp án gốc (Để máy chấm)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        TextButton(onClick = {
+                            drawPath.reset()
+                            pathTrigger++
+                        }) {
+                            Text("Xóa nét vẽ", color = Color.Red, fontSize = 12.sp)
                         }
                     }
                 }
@@ -219,22 +226,34 @@ fun DeckDetailScreen(
                     onClick = {
                         if (frontText.isNotBlank() && backText.isNotBlank()) {
                             val imgUrl = selectedImageUri?.toString()
-                            viewModel.addCard(token, deck._id, frontText, backText, cardType, imgUrl, "CanvasData") {
+                            val soundUrl = selectedSoundUri?.toString() // Gán link âm thanh
+
+                            viewModel.addCard(
+                                token = token,
+                                deckId = deck._id,
+                                front = frontText,
+                                back = backText,
+                                type = "TEXT",
+                                imageUrl = imgUrl,
+                                drawData = "CanvasData",
+                                sound = soundUrl // Đẩy link vào ViewModel
+                            ) {
                                 showDialog = false
-                                frontText = ""; backText = ""; selectedImageUri = null; drawPath = Path() // Reset
+                                // Reset hết sạch sành sanh sau khi lưu thành công
+                                frontText = ""; backText = ""; selectedImageUri = null; selectedSoundUri = null; drawPath.reset(); pathTrigger++
                             }
                         }
                     },
-                    // THÊM: Khóa nút khi đang load để tránh bấm nhiều lần
-                    enabled = !isLoading
+                    enabled = !isLoading && frontText.isNotBlank() && backText.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    // THÊM: Đổi chữ khi đang đợi Server và Cập nhật lại tên nút theo ý bạn
                     Text(if (isLoading) "Đang lưu..." else "Lưu thẻ")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("Hủy") }
-            }
+                TextButton(onClick = { showDialog = false }) { Text("Hủy", color = Color.Gray) }
+            },
+            shape = RoundedCornerShape(24.dp)
         )
     }
 }

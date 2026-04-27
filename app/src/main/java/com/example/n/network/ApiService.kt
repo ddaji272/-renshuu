@@ -13,9 +13,7 @@ import retrofit2.http.PUT
 import retrofit2.http.Path
 import java.util.concurrent.TimeUnit
 
-// ==========================================
 // 1. CÁC LỚP DỮ LIỆU (DATA CLASSES)
-// ==========================================
 // Auth
 data class UserInfo(val id: String, val email: String)
 data class LoginRequest(val email: String, val password: String)
@@ -30,26 +28,28 @@ data class GeneralResponse(val message: String)
 data class DeckRequest(val name: String)
 data class DeckResponse(val _id: String, val name: String)
 
-// CardRequest: Có Bùa chú SerializedName để tự động dịch sang chuẩn Backend
+// CardRequest: Thêm trường sound để gửi link âm thanh lên Backend
 data class CardRequest(
     @SerializedName("deckID") val deckId: String,
     val front: String,
     val back: String,
-    val type: String = "TEXT",     // Loại thẻ: TEXT, IMAGE, TOUCH
+    val type: String = "TEXT",
     @SerializedName("image") val imageUrl: String? = null,
-    val drawData: String? = null
+    val drawData: String? = null,
+    val sound: String? = null // <-- THÊM DÒNG NÀY ĐỂ GỬI ĐI
 )
 
+// CardResponse: Thêm trường sound để nhận link âm thanh từ Backend về
 data class CardResponse(
     val _id: String,
     val front: String,
     val back: String,
     val type: String? = "TEXT",
     val imageUrl: String? = null,
-    val drawData: String? = null
+    val drawData: String? = null,
+    val sound: String? = null // <-- THÊM DÒNG NÀY ĐỂ NHẬN VỀ
 )
 
-// ĐÃ SỬA: Đổi tên biến thành "rating" để Backend hiểu (0-Again, 1-Hard, 2-Good, 3-Easy)
 data class ReviewRequest(val rating: Int)
 
 
@@ -108,10 +108,7 @@ interface ApiService {
         @Path("deckId") deckId: String
     ): List<CardResponse>
 
-    // ==========================================
     // --- STUDY ROUTES (FSRS / SM-2) ---
-    // ==========================================
-    // ĐÃ SỬA: URL trỏ vào đúng studyRoutes và nối ID thẻ trực tiếp lên thanh URL
     @POST("/api/study/review/{id}")
     suspend fun reviewCard(
         @Header("Authorization") token: String,
