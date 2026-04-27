@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,12 +29,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.n.network.CardResponse
 import com.example.n.viewmodel.FlashcardViewModel
-import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,14 +51,32 @@ fun StudyScreen(
     val context = LocalContext.current
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
-    // KHỞI TẠO BẢNG NHÁP CHO MẶT TRƯỚC
     val scratchPath = remember { Path() }
     var scratchTrigger by remember { mutableIntStateOf(0) }
 
-    // Tự động xóa bảng nháp khi chuyển sang thẻ mới
+    // === BIẾN CHO TÍNH NĂNG VUỐT ===
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var showSwipeHint by remember { mutableStateOf(false) }
+    var hasSeenHint by remember { mutableStateOf(false) }
+
+    // Tự động quản lý thông báo mờ
+    LaunchedEffect(isFlipped) {
+        if (isFlipped && !hasSeenHint) {
+            showSwipeHint = true
+            delay(3500)
+            showSwipeHint = false
+            hasSeenHint = true
+        } else if (!isFlipped) {
+            showSwipeHint = false
+            offsetX = 0f
+        }
+    }
+
     LaunchedEffect(currentIndex) {
         scratchPath.reset()
         scratchTrigger++
+        isFlipped = false
+        offsetX = 0f
     }
 
     DisposableEffect(context) {
@@ -70,7 +90,6 @@ fun StudyScreen(
         }
     }
 
-    // HÀM XỬ LÝ ÂM THANH THÔNG MINH
     fun handleSpeech(text: String, soundUrl: String?, isTtsReady: Boolean) {
         if (!soundUrl.isNullOrEmpty()) {
             try {
@@ -127,114 +146,173 @@ fun StudyScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(420.dp) // Tăng chiều cao lên chút để chứa bảng nháp
-                        .graphicsLayer {
-                            rotationY = rotation
-                            cameraDistance = 12f * density
-                        }
-                        // Vẫn cho phép bấm lật thẻ, nhưng sẽ không ảnh hưởng đến vùng vẽ nháp
-                        .clickable { isFlipped = !isFlipped },
+                        .height(420.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer
-                            else MaterialTheme.colorScheme.secondaryContainer
-                        ),
-                        elevation = CardDefaults.cardElevation(8.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            if (rotation <= 90f) {
-                                // ================== MẶT TRƯỚC ==================
-                                IconButton(
-                                    // SỬ DỤNG HÀM ÂM THANH THÔNG MINH
-                                    onClick = { handleSpeech(currentCard.front, currentCard.sound, tts != null) },
-                                    modifier = Modifier.align(Alignment.TopEnd)
-                                ) {
-                                    Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
-                                }
-
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text(
-                                        text = currentCard.front,
-                                        fontSize = 32.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(bottom = 24.dp)
-                                    )
-
-                                    // BẢNG NHÁP (SCRATCHPAD) DÀNH CHO CHỮ TƯỢNG HÌNH
-                                    Text("✍️ Bảng nháp viết chữ:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(180.dp) // Khu vực nháp
-                                            .padding(top = 4.dp)
-                                            .border(2.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                            .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                                    ) {
-                                        Canvas(
-                                            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                                                detectDragGestures(
-                                                    onDragStart = { offset ->
-                                                        scratchPath.moveTo(offset.x, offset.y)
-                                                        scratchTrigger++
-                                                    },
-                                                    onDrag = { change, _ ->
-                                                        scratchPath.lineTo(change.position.x, change.position.y)
-                                                        scratchTrigger++
-                                                    }
-                                                )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .offset { IntOffset(offsetX.roundToInt(), 0) }
+                            .graphicsLayer {
+                                rotationY = rotation
+                                cameraDistance = 12f * density
+                                rotationZ = offsetX / 25f
+                            }
+                            // ĐÃ SỬA: Bấm phát lật mặt sau, bấm phát nữa lật về mặt trước vô tư!
+                            .clickable { isFlipped = !isFlipped }
+                            .pointerInput(isFlipped) {
+                                if (isFlipped) {
+                                    detectHorizontalDragGestures(
+                                        onDragEnd = {
+                                            if (offsetX > 250f) {
+                                                viewModel.submitReview(token, currentCard._id, 2)
+                                                isFlipped = false
+                                            } else if (offsetX < -250f) {
+                                                viewModel.submitReview(token, currentCard._id, 0)
+                                                isFlipped = false
+                                            } else {
+                                                offsetX = 0f
                                             }
-                                        ) {
-                                            val trigger = scratchTrigger
-                                            drawPath(path = scratchPath, color = Color.Blue, style = Stroke(width = 8f))
                                         }
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        offsetX += dragAmount
                                     }
                                 }
-                            } else {
-                                // ================== MẶT SAU ==================
-                                Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
+                            }
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer
+                                else MaterialTheme.colorScheme.secondaryContainer
+                            ),
+                            elevation = CardDefaults.cardElevation(8.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                if (rotation <= 90f) {
+                                    // MẶT TRƯỚC
                                     IconButton(
-                                        // MẶT SAU: Ưu tiên file âm thanh nếu có, không thì đọc phần backText
-                                        onClick = { handleSpeech(currentCard.back, currentCard.sound, tts != null) },
-                                        modifier = Modifier.align(Alignment.TopStart)
+                                        onClick = { handleSpeech(currentCard.front, currentCard.sound, tts != null) },
+                                        modifier = Modifier.align(Alignment.TopEnd)
                                     ) {
                                         Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
                                     }
 
                                     Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = currentCard.back,
-                                            fontSize = 32.sp, // Chữ to rõ để so nét
+                                            text = currentCard.front,
+                                            fontSize = 32.sp,
                                             fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(bottom = 24.dp)
                                         )
 
-                                        if (!currentCard.imageUrl.isNullOrEmpty()) {
-                                            Spacer(Modifier.height(16.dp))
-                                            AsyncImage(
-                                                model = currentCard.imageUrl,
-                                                contentDescription = "Hình ảnh minh họa",
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(160.dp)
-                                                    .clip(RoundedCornerShape(12.dp)),
-                                                contentScale = ContentScale.Crop
+                                        Text("✍️ Bảng nháp viết chữ:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(180.dp)
+                                                .padding(top = 4.dp)
+                                                .border(2.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                                .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                        ) {
+                                            Canvas(
+                                                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                                                    detectDragGestures(
+                                                        onDragStart = { offset ->
+                                                            scratchPath.moveTo(offset.x, offset.y)
+                                                            scratchTrigger++
+                                                        },
+                                                        onDrag = { change, _ ->
+                                                            scratchPath.lineTo(change.position.x, change.position.y)
+                                                            scratchTrigger++
+                                                        }
+                                                    )
+                                                }
+                                            ) {
+                                                val trigger = scratchTrigger
+                                                drawPath(path = scratchPath, color = Color.Blue, style = Stroke(width = 8f))
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // MẶT SAU
+                                    Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
+                                        IconButton(
+                                            onClick = { handleSpeech(currentCard.back, currentCard.sound, tts != null) },
+                                            modifier = Modifier.align(Alignment.TopStart)
+                                        ) {
+                                            Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
+                                        }
+
+                                        Column(
+                                            modifier = Modifier.align(Alignment.Center),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = currentCard.back,
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center
                                             )
+
+                                            if (!currentCard.imageUrl.isNullOrEmpty()) {
+                                                Spacer(Modifier.height(16.dp))
+                                                AsyncImage(
+                                                    model = currentCard.imageUrl,
+                                                    contentDescription = "Hình ảnh minh họa",
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(160.dp)
+                                                        .clip(RoundedCornerShape(12.dp)),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // ========================================================
+                    // ĐÃ LÀM ĐẸP: UI THÔNG BÁO VUỐT "SANG - XỊN - MỊN" HƠN
+                    // ========================================================
+                    val hintAlpha by animateFloatAsState(
+                        targetValue = if (showSwipeHint) 1f else 0f,
+                        animationSpec = tween(600),
+                        label = "HintAlpha"
+                    )
+
+                    if (hintAlpha > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 20.dp)
+                                .graphicsLayer {
+                                    alpha = hintAlpha
+                                    translationY = (1f - hintAlpha) * 50f // Trượt mượt mà từ dưới lên
+                                }
+                                .background(
+                                    color = Color(0xFF2C2C2E).copy(alpha = 0.85f), // Màu nền tối sang trọng
+                                    shape = RoundedCornerShape(50) // Dạng viên thuốc bo tròn
+                                )
+                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50)) // Bo viền kính
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "👈 Lặp lại    |    Tốt 👉",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = 0.5.sp
+                            )
                         }
                     }
                 }
@@ -265,7 +343,7 @@ fun StudyScreen(
                     }
                 } else {
                     Text(
-                        "Chạm vào ngoài viền bảng nháp để lật thẻ",
+                        "Chạm vào thẻ để xem đáp án",
                         color = Color.Gray,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
