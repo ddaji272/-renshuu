@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.n.network.CardResponse
 import com.example.n.viewmodel.FlashcardViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -54,16 +57,19 @@ fun StudyScreen(
     val scratchPath = remember { Path() }
     var scratchTrigger by remember { mutableIntStateOf(0) }
 
-    // === BIẾN CHO TÍNH NĂNG VUỐT ===
+    // BIẾN CHO TÍNH NĂNG VUỐT
     var offsetX by remember { mutableFloatStateOf(0f) }
     var showSwipeHint by remember { mutableStateOf(false) }
     var hasSeenHint by remember { mutableStateOf(false) }
 
-    // Tự động quản lý thông báo mờ
+    // Tính toán độ rõ nét của "Nhãn dán" (Stamps) dựa trên lực vuốt
+    val rightSwipeAlpha = (offsetX / 150f).coerceIn(0f, 1f) // Điểm TỐT
+    val leftSwipeAlpha = (-offsetX / 150f).coerceIn(0f, 1f) // Điểm LẶP LẠI
+
     LaunchedEffect(isFlipped) {
         if (isFlipped && !hasSeenHint) {
             showSwipeHint = true
-            delay(3500)
+            delay(4000)
             showSwipeHint = false
             hasSeenHint = true
         } else if (!isFlipped) {
@@ -158,16 +164,16 @@ fun StudyScreen(
                                 cameraDistance = 12f * density
                                 rotationZ = offsetX / 25f
                             }
-                            // ĐÃ SỬA: Bấm phát lật mặt sau, bấm phát nữa lật về mặt trước vô tư!
+                            // Bấm lật 2 chiều vô tư
                             .clickable { isFlipped = !isFlipped }
                             .pointerInput(isFlipped) {
                                 if (isFlipped) {
                                     detectHorizontalDragGestures(
                                         onDragEnd = {
-                                            if (offsetX > 250f) {
+                                            if (offsetX > 200f) {
                                                 viewModel.submitReview(token, currentCard._id, 2)
                                                 isFlipped = false
-                                            } else if (offsetX < -250f) {
+                                            } else if (offsetX < -200f) {
                                                 viewModel.submitReview(token, currentCard._id, 0)
                                                 isFlipped = false
                                             } else {
@@ -275,46 +281,84 @@ fun StudyScreen(
                                                 )
                                             }
                                         }
+
+                                        // ===============================================
+                                        // HIỆU ỨNG STAMPS CHUẨN TINDER (NẰM Ở MẶT SAU)
+                                        // ===============================================
+                                        if (isFlipped) {
+                                            // Nhãn TỐT (Xanh lá)
+                                            Text(
+                                                text = "TỐT",
+                                                color = Color(0xFF4CAF50),
+                                                fontSize = 28.sp,
+                                                fontWeight = FontWeight.Black,
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(top = 16.dp, start = 8.dp)
+                                                    .graphicsLayer {
+                                                        alpha = rightSwipeAlpha
+                                                        rotationZ = -15f
+                                                        scaleX = 1f + (rightSwipeAlpha * 0.2f)
+                                                        scaleY = 1f + (rightSwipeAlpha * 0.2f)
+                                                    }
+                                                    .border(4.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
+                                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                                            )
+
+                                            // Nhãn LẶP LẠI (Đỏ)
+                                            Text(
+                                                text = "LẶP LẠI",
+                                                color = Color(0xFFE53935),
+                                                fontSize = 28.sp,
+                                                fontWeight = FontWeight.Black,
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(top = 16.dp, end = 8.dp)
+                                                    .graphicsLayer {
+                                                        alpha = leftSwipeAlpha
+                                                        rotationZ = 15f
+                                                        scaleX = 1f + (leftSwipeAlpha * 0.2f)
+                                                        scaleY = 1f + (leftSwipeAlpha * 0.2f)
+                                                    }
+                                                    .border(4.dp, Color(0xFFE53935), RoundedCornerShape(8.dp))
+                                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
 
-                    // ========================================================
-                    // ĐÃ LÀM ĐẸP: UI THÔNG BÁO VUỐT "SANG - XỊN - MỊN" HƠN
-                    // ========================================================
-                    val hintAlpha by animateFloatAsState(
-                        targetValue = if (showSwipeHint) 1f else 0f,
-                        animationSpec = tween(600),
-                        label = "HintAlpha"
-                    )
+                // ========================================================
+                // HƯỚNG DẪN VUỐT SIÊU TINH TẾ (Nằm ngoài thẻ)
+                // ========================================================
+                val hintAlpha by animateFloatAsState(
+                    targetValue = if (showSwipeHint) 0.6f else 0f,
+                    animationSpec = tween(1000),
+                    label = "HintAlpha"
+                )
 
-                    if (hintAlpha > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 20.dp)
-                                .graphicsLayer {
-                                    alpha = hintAlpha
-                                    translationY = (1f - hintAlpha) * 50f // Trượt mượt mà từ dưới lên
-                                }
-                                .background(
-                                    color = Color(0xFF2C2C2E).copy(alpha = 0.85f), // Màu nền tối sang trọng
-                                    shape = RoundedCornerShape(50) // Dạng viên thuốc bo tròn
-                                )
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50)) // Bo viền kính
-                                .padding(horizontal = 24.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "👈 Lặp lại    |    Tốt 👉",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = 0.5.sp
-                            )
+                if (hintAlpha > 0f) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, start = 24.dp, end = 24.dp)
+                            .graphicsLayer { alpha = hintAlpha },
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                            Text("Lặp lại", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Tốt", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
                         }
                     }
+                } else {
+                    Spacer(modifier = Modifier.height(34.dp)) // Giữ chỗ để UI không bị giật khi hint biến mất
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
