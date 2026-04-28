@@ -47,18 +47,16 @@ data class CardResponse(
     val type: String? = "TEXT",
     val imageUrl: String? = null,
     val drawData: String? = null,
-    val sound: String? = null // <-- THÊM DÒNG NÀY ĐỂ NHẬN VỀ
+    val sound: String? = null
 )
 
 data class ReviewRequest(val rating: Int)
 
 
-// ==========================================
 // 2. KHAI BÁO CÁC ĐƯỜNG DẪN API (ROUTES)
-// ==========================================
 interface ApiService {
 
-    // --- AUTH ROUTES ---
+    // AUTH ROUTES
     @POST("/api/auth/login")
     suspend fun loginUser(@Body request: LoginRequest): LoginResponse
 
@@ -71,7 +69,7 @@ interface ApiService {
     @POST("/api/auth/logout")
     suspend fun logoutUser(): GeneralResponse
 
-    // --- DECK ROUTES ---
+    // DECK ROUTES
     @POST("/api/deck")
     suspend fun createDeck(
         @Header("Authorization") token: String,
@@ -89,7 +87,7 @@ interface ApiService {
         @Path("id") deckId: String
     ): GeneralResponse
 
-    // --- CARD ROUTES ---
+    // CARD ROUTES
     @POST("/api/card")
     suspend fun createCard(
         @Header("Authorization") token: String,
@@ -108,7 +106,7 @@ interface ApiService {
         @Path("deckId") deckId: String
     ): List<CardResponse>
 
-    // --- STUDY ROUTES (FSRS / SM-2) ---
+    // STUDY ROUTES (FSRS / SM-2)
     @POST("/api/study/review/{id}")
     suspend fun reviewCard(
         @Header("Authorization") token: String,
@@ -117,10 +115,7 @@ interface ApiService {
     ): GeneralResponse
 }
 
-
-// ==========================================
 // 3. KHỞI TẠO CẤU HÌNH MẠNG (RETROFIT)
-// ==========================================
 object RetrofitClient {
     private const val BASE_URL = "https://renshuu-backend.onrender.com/"
 

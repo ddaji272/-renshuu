@@ -2,8 +2,10 @@ package com.example.n.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.n.model.Flashcard // Import model Flashcard cũ của bạn
+import com.example.n.BuildConfig
+import com.example.n.model.Flashcard
 import com.example.n.network.*
+import com.google.ai.client.generativeai.GenerativeModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,7 +84,6 @@ class FlashcardViewModel : ViewModel() {
     private val _cards = MutableStateFlow<List<CardResponse>>(emptyList())
     val cards: StateFlow<List<CardResponse>> = _cards.asStateFlow()
 
-    // Tải danh sách thẻ khi bấm vào 1 bộ bài
     fun fetchCards(token: String, deckId: String) {
         viewModelScope.launch {
             try {
@@ -97,22 +98,20 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // Thêm thẻ mới
     fun addCard(
         token: String,
         deckId: String,
         front: String,
         back: String,
-        type: String,         // Thêm loại
-        imageUrl: String?,    // Thêm ảnh
-        drawData: String?,    // Thêm nét vẽ
-        sound: String? = null,// <-- THÊM BIẾN SOUND VÀO ĐÂY ĐỂ HỨNG DỮ LIỆU TỪ UI
+        type: String,
+        imageUrl: String?,
+        drawData: String?,
+        sound: String? = null,
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                // Nhét biến sound vào chung gói Request để đẩy lên Backend
                 val request = CardRequest(deckId, front, back, type, imageUrl, drawData, sound)
                 val response = RetrofitClient.apiService.createCard("Bearer $token", request)
                 _cards.value = _cards.value + response
@@ -125,12 +124,11 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // Xóa thẻ
     fun deleteCard(token: String, cardId: String) {
         viewModelScope.launch {
             try {
                 RetrofitClient.apiService.deleteCard("Bearer $token", cardId)
-                _cards.value = _cards.value.filter { it._id != cardId } // Rút thẻ vừa xóa khỏi UI
+                _cards.value = _cards.value.filter { it._id != cardId }
                 println("Xóa thẻ thành công!")
             } catch (e: Exception) {
                 println("Lỗi xóa thẻ: ${e.message}")
@@ -138,20 +136,17 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // Danh sách thẻ dành riêng cho việc ôn tập
     private val _studyCards = MutableStateFlow<List<CardResponse>>(emptyList())
     val studyCards: StateFlow<List<CardResponse>> = _studyCards.asStateFlow()
 
     private val _studyIndex = MutableStateFlow(0)
     val studyIndex: StateFlow<Int> = _studyIndex.asStateFlow()
 
-    // Lấy danh sách thẻ cần học hôm nay
     fun fetchStudyCards(token: String, deckId: String) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
                 val response = RetrofitClient.apiService.getCardsByDeck("Bearer $token", deckId)
-                // Sau này sẽ lọc theo ngày ôn tập từ Backend, tạm thời lấy hết để test
                 _studyCards.value = response
                 _studyIndex.value = 0
             } catch (e: Exception) {
@@ -162,20 +157,83 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // Gửi kết quả (0-Again, 1-Hard, 2-Good, 3-Easy)
     fun submitReview(token: String, cardId: String, rating: Int) {
         viewModelScope.launch {
             try {
                 RetrofitClient.apiService.reviewCard("Bearer $token", cardId, ReviewRequest(rating))
-                // Chuyển sang thẻ tiếp theo
                 if (_studyIndex.value < _studyCards.value.size - 1) {
                     _studyIndex.value += 1
                 } else {
-                    _studyCards.value = emptyList() // Đã hoàn thành bộ bài
+                    _studyCards.value = emptyList()
                 }
             } catch (e: Exception) {
                 println("Lỗi gửi review: ${e.message}")
             }
+        }
+    }
+
+    // 4. TÍNH NĂNG TẠO THẺ THÔNG MINH BẰNG AI (QUICK ADD) - ĐA NGÔN NGỮ
+    suspend fun createCardWithAI(token: String, frontText: String): Boolean {
+        return try {
+            _isLoading.value = true
+
+            // Lấy danh sách Deck nếu đang rỗng
+            if (_decks.value.isEmpty()) {
+                val decksResponse = RetrofitClient.apiService.getDecks("Bearer $token")
+                _decks.value = decksResponse
+            }
+
+            // Gọi GEMINI AI với API Key đã được bảo mật từ BuildConfig
+            val generativeModel = GenerativeModel(
+                modelName = "gemini-1.5-flash",
+                apiKey = BuildConfig.GEMINI_API_KEY
+            )
+
+            // Prompt ép AI TỰ ĐỘNG NHẬN DIỆN ngôn ngữ
+            val prompt = """
+                Bạn là một chuyên gia ngôn ngữ đa quốc gia. Hãy phân tích từ hoặc cụm từ sau: '$frontText'.
+                Hãy tự động nhận diện ngôn ngữ gốc của từ này (Anh, Nhật, Trung, Hàn, Pháp...) và trả về kết quả tuân thủ NGHIÊM NGẶT định dạng sau, tuyệt đối không thêm lời chào hay giải thích thừa:
+                
+                [Phiên âm theo chuẩn của ngôn ngữ gốc]
+                Nghĩa tiếng Việt (Từ loại)
+                Ví dụ: <1 câu ví dụ bằng CHÍNH NGÔN NGỮ ĐÓ chứa từ trên> (Nghĩa tiếng Việt của câu ví dụ)
+            """.trimIndent()
+
+            val response = generativeModel.generateContent(prompt)
+            val backText = response.text?.trim() ?: "Không tìm thấy nghĩa"
+
+            // Tìm hoặc tạo Deck "Hộp Nháp"
+            var inboxDeck = _decks.value.find { it.name.equals("Hộp Nháp", ignoreCase = true) }
+
+            if (inboxDeck == null) {
+                val newDeck = RetrofitClient.apiService.createDeck("Bearer $token", DeckRequest("Hộp Nháp"))
+                _decks.value = _decks.value + newDeck
+                inboxDeck = newDeck
+            }
+
+            val deckId = inboxDeck._id
+
+            // Tạo thẻ lưu lên server
+            val request = CardRequest(
+                deckId = deckId,
+                front = frontText,
+                back = backText,
+                type = "text",
+                imageUrl = null,
+                drawData = null,
+                sound = null
+            )
+            RetrofitClient.apiService.createCard("Bearer $token", request)
+
+            // Cập nhật giao diện Hộp Nháp
+            fetchCards(token, deckId)
+
+            true
+        } catch (e: Exception) {
+            println("Lỗi AI tạo thẻ: ${e.message}")
+            false
+        } finally {
+            _isLoading.value = false
         }
     }
 }
