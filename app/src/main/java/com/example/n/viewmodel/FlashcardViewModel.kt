@@ -185,7 +185,7 @@ class FlashcardViewModel : ViewModel() {
 
             // Gọi GEMINI AI với API Key đã được bảo mật từ BuildConfig
             val generativeModel = GenerativeModel(
-                modelName = "gemini-1.5-flash",
+                modelName = "gemini-2.5-flash",
                 apiKey = BuildConfig.GEMINI_API_KEY
             )
 
@@ -230,6 +230,7 @@ class FlashcardViewModel : ViewModel() {
 
             true
         } catch (e: Exception) {
+            e.printStackTrace()
             println("Lỗi AI tạo thẻ: ${e.message}")
             false
         } finally {

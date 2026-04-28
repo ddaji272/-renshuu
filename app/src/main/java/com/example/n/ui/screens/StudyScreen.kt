@@ -38,6 +38,8 @@ import coil.compose.AsyncImage
 import com.example.n.viewmodel.FlashcardViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,9 +150,7 @@ fun StudyScreen(
                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
 
-                // =================================================================
                 // LỚP 1: XỬ LÝ VUỐT (Chịu trách nhiệm di chuyển thẻ theo tay)
-                // =================================================================
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -183,9 +183,7 @@ fun StudyScreen(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    // =================================================================
                     // LỚP 2: XỬ LÝ LẬT 3D VÀ GIAO DIỆN THẺ
-                    // =================================================================
                     Card(
                         modifier = Modifier
                             .fillMaxSize()
@@ -203,7 +201,7 @@ fun StudyScreen(
                     ) {
                         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                             if (rotation <= 90f) {
-                                // ---------------- MẶT TRƯỚC ----------------
+                                // MẶT TRƯỚC
                                 IconButton(
                                     onClick = { handleSpeech(currentCard.front, currentCard.sound, tts != null) },
                                     modifier = Modifier.align(Alignment.TopEnd)
@@ -253,7 +251,7 @@ fun StudyScreen(
                                     }
                                 }
                             } else {
-                                // ---------------- MẶT SAU ----------------
+                                // MẶT SAU
                                 // Bọc một Box có rotationY = 180f để lật ngược nội dung lại cho xuôi chữ
                                 Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
                                     IconButton(
@@ -263,15 +261,25 @@ fun StudyScreen(
                                         Icon(Icons.Filled.VolumeUp, contentDescription = "Nghe", tint = MaterialTheme.colorScheme.primary)
                                     }
 
+                                    val scrollState = rememberScrollState()
+
                                     Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .padding(top = 40.dp, bottom = 20.dp) // Chừa chỗ cho nút loa và nhãn dán
+                                            .fillMaxHeight()
+                                            .verticalScroll(scrollState),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center // Căn giữa nội dung nếu ngắn
                                     ) {
                                         Text(
                                             text = currentCard.back,
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
+                                            fontSize = 20.sp, // Giảm cỡ chữ xuống một chút để dễ đọc
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Start, // Căn trái cho các đoạn văn dài
+                                            lineHeight = 32.sp, // Tăng khoảng cách dòng để không bị đè
+                                            color = Color(0xFF333333),
+                                            modifier = Modifier.padding(horizontal = 8.dp)
                                         )
 
                                         if (!currentCard.imageUrl.isNullOrEmpty()) {
