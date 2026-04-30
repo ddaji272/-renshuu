@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,26 +14,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.n.viewmodel.ChatbotViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatbotScreen(
     onBack: () -> Unit,
-    viewModel: ChatbotViewModel = viewModel() // Tự động tạo hoặc lấy ViewModel đã có
+    viewModel: ChatbotViewModel = viewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
 
     // Tự động cuộn xuống cuối khi có tin nhắn mới
     LaunchedEffect(messages.size) {
@@ -42,45 +42,67 @@ fun ChatbotScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Trợ lý AI Renshuu", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary,
+            Surface(
+                shadowElevation = 2.dp, // Thêm bóng đổ nhẹ cho thanh TopBar
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🤖", fontSize = 20.sp, modifier = Modifier.padding(end = 8.dp))
+                            Text("Trợ lý AI Renshuu", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.primary,
+                    )
                 )
-            )
+            }
         },
         bottomBar = {
-            // Thanh nhập chat ở dưới cùng
+            // KHUNG NHẬP LIỆU LÀM LẠI HOÀN TOÀN
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
+                shadowElevation = 16.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .navigationBarsPadding() // Tránh bị đè bởi thanh điều hướng hệ thống
-                        .imePadding(), // Đẩy lên khi bàn phím hiện
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .navigationBarsPadding()
+                        .imePadding(),
+                    verticalAlignment = Alignment.Bottom // Căn dưới để khi text dài xuống dòng không bị lệch nút Gửi
                 ) {
-                    OutlinedTextField(
+                    // Khung nhập text bo tròn, không viền
+                    TextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        placeholder = { Text("Nhập câu hỏi...") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        enabled = !isLoading // Khóa không cho nhập khi AI đang nghĩ
+                        placeholder = { Text("Bạn muốn hỏi gì nào?", color = Color.Gray) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(24.dp)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent
+                        ),
+                        maxLines = 4, // Cho phép nhập dài tối đa 4 dòng rồi mới cuộn
+                        enabled = !isLoading
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
+                    // Nút gửi xịn xò
                     IconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
@@ -89,70 +111,113 @@ fun ChatbotScreen(
                             }
                         },
                         enabled = inputText.isNotBlank() && !isLoading,
-                        modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
+                        modifier = Modifier
+                            .size(52.dp) // Nút to dễ bấm hơn
+                            .background(
+                                color = if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = CircleShape
+                            )
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Gửi",
-                            tint = Color.White
+                            tint = if (inputText.isNotBlank()) Color.White else Color.Gray,
+                            modifier = Modifier.padding(start = 4.dp) // Dịch icon send sang phải 1 xíu cho cân tâm
                         )
                     }
                 }
             }
         }
     ) { paddingValues ->
-        // Khung hiển thị tin nhắn
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(vertical = 20.dp), // Tăng khoảng cách trên dưới
+            verticalArrangement = Arrangement.spacedBy(16.dp) // Tăng khoảng cách giữa các tin nhắn
         ) {
             items(messages) { msg ->
                 val isUser = msg.isFromUser
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.Bottom // Avatar nằm ở đáy bong bóng
                 ) {
+                    // Avatar AI (Chỉ hiện khi là tin nhắn của AI)
+                    if (!isUser) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🤖", fontSize = 18.sp)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    // Bong bóng tin nhắn với Tail (đuôi)
                     Box(
                         modifier = Modifier
+                            .weight(1f, fill = false) // Không chiếm hết chiều ngang
                             .background(
-                                color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                                color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                                 shape = RoundedCornerShape(
-                                    topStart = 20.dp,
-                                    topEnd = 20.dp,
-                                    bottomStart = if (isUser) 20.dp else 4.dp,
-                                    bottomEnd = if (isUser) 4.dp else 20.dp
+                                    topStart = 24.dp,
+                                    topEnd = 24.dp,
+                                    bottomStart = if (isUser) 24.dp else 4.dp, // Góc nhọn tạo đuôi
+                                    bottomEnd = if (isUser) 4.dp else 24.dp    // Góc nhọn tạo đuôi
                                 )
                             )
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                            .widthIn(max = 280.dp) // Giới hạn chiều rộng tin nhắn
+                            .padding(horizontal = 18.dp, vertical = 12.dp)
                     ) {
                         Text(
                             text = msg.text,
-                            color = if (isUser) Color.White else MaterialTheme.colorScheme.onSecondaryContainer,
-                            fontSize = 16.sp
+                            color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp
                         )
                     }
                 }
             }
 
-            // Hiệu ứng "AI đang gõ..."
+            // Hiệu ứng "AI đang gõ..." làm lại đẹp hơn
             if (isLoading) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.Bottom
                     ) {
                         Box(
                             modifier = Modifier
-                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(16.dp))
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                .size(32.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Đang suy nghĩ...", color = MaterialTheme.colorScheme.onSecondaryContainer, fontSize = 14.sp)
+                            Text("🤖", fontSize = 18.sp)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(24.dp, 24.dp, 24.dp, 4.dp)
+                                )
+                                .padding(horizontal = 18.dp, vertical = 12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Đang suy nghĩ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp
+                                )
+                            }
                         }
                     }
                 }
