@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close // <-- Đã import icon nút X
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -34,7 +35,7 @@ fun HomeScreen(
     onLogout: () -> Unit,
     onDeckClick: (com.example.n.network.DeckResponse) -> Unit,
     onStudyClick: (com.example.n.network.DeckResponse) -> Unit,
-    onChatbotClick: () -> Unit // <-- THÊM PARAM NÀY ĐỂ KÍCH HOẠT CHATBOT
+    onChatbotClick: () -> Unit
 ) {
     val decks by flashcardViewModel.decks.collectAsState()
     val isLoading by flashcardViewModel.isLoading.collectAsState()
@@ -42,10 +43,22 @@ fun HomeScreen(
     var showDialog by remember { mutableStateOf(false) }
     var deckName by remember { mutableStateOf("") }
 
-    // BIẾN CHO DIALOG THÔNG BÁO AI (Kiểm tra xem đã hiện lần nào chưa)
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("renshuu_prefs", Context.MODE_PRIVATE)
     var showAIGuide by remember { mutableStateOf(prefs.getBoolean("show_ai_guide", true)) }
+
+    // ==========================================
+    // BIẾN CHO THẺ "MẸO HAY MỖI NGÀY"
+    // ==========================================
+    val tips = listOf(
+        "Bí kíp: Chạm vào chữ 'Renshuu' màu tím ở góc trái trên cùng để gọi Trợ lý AI giải đáp thắc mắc nhé! 🤖",
+        "Mẹo nhanh: Khi đọc báo gặp từ khó, hãy bôi đen và chọn 'Thêm vào Renshuu' để tạo thẻ siêu tốc! ⚡",
+        "Bạn có biết? Thuật toán FSRS của Renshuu sẽ tính toán chính xác ngày bạn sắp quên từ vựng để nhắc nhở. 🧠",
+        "Thói quen tốt: Dành ra 5 phút lướt qua 'Hộp Nháp' mỗi ngày để chuyển từ vựng vào trí nhớ dài hạn nhé! 📦"
+    )
+    val currentTip = remember { tips.random() } // Random 1 câu mỗi lần mở app
+    var showTipCard by remember { mutableStateOf(true) } // Công tắc bật/tắt thẻ
+    // ==========================================
 
     LaunchedEffect(Unit) {
         if (token.isNotEmpty()) {
@@ -57,7 +70,6 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    // NÚT ẤN BÍ MẬT GỌI AI CHATBOT (Bọc vào text Renshuu)
                     Text(
                         text = "Renshuu",
                         fontWeight = FontWeight.ExtraBold,
@@ -65,7 +77,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onChatbotClick() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp) // Thêm lề cho dễ chạm tay
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -98,7 +110,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp, vertical = 8.dp) // Căn lề thoáng hơn
+                .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             item {
                 Text(
@@ -111,12 +123,12 @@ fun HomeScreen(
             }
 
             item {
-                // THẺ TỔNG QUAN (Đã làm lại xịn xò)
+                // THẺ TỔNG QUAN
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Dùng màu chìm thay vì bóng
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -144,6 +156,56 @@ fun HomeScreen(
                     }
                 }
             }
+
+            // ==========================================
+            // THẺ MẸO HAY MỖI NGÀY (IN-APP MESSAGE)
+            // ==========================================
+            if (showTipCard) {
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("💡", fontSize = 28.sp)
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Text(
+                                text = currentTip,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.weight(1f),
+                                lineHeight = 20.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+
+                            IconButton(
+                                onClick = { showTipCard = false }, // Bấm X là giấu thẻ đi
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Đóng",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            // ==========================================
 
             item {
                 Spacer(modifier = Modifier.height(32.dp))
@@ -186,7 +248,6 @@ fun HomeScreen(
                 }
             } else {
                 items(decks) { deck ->
-                    // UI TỪNG BỘ BÀI
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -200,7 +261,6 @@ fun HomeScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Icon thư mục có nền mờ
                             Box(
                                 modifier = Modifier
                                     .size(56.dp)
@@ -219,7 +279,6 @@ fun HomeScreen(
                                 Text("Chạm để chỉnh sửa", color = Color.Gray, fontSize = 13.sp)
                             }
 
-                            // NÚT HỌC NGAY (Có nền mờ xanh lá)
                             IconButton(
                                 onClick = { onStudyClick(deck) },
                                 modifier = Modifier
@@ -231,7 +290,6 @@ fun HomeScreen(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // NÚT XÓA (Có nền mờ đỏ)
                             IconButton(
                                 onClick = { flashcardViewModel.deleteDeck(token, deck._id) },
                                 modifier = Modifier
@@ -244,13 +302,13 @@ fun HomeScreen(
                     }
                 }
                 item {
-                    Spacer(modifier = Modifier.height(80.dp)) // Tránh bị nút FAB che mất item cuối
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }
     }
 
-    // DIALOG TẠO BỘ BÀI MỚI (Làm mượt hơn)
+    // DIALOG TẠO BỘ BÀI MỚI
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -289,10 +347,10 @@ fun HomeScreen(
         )
     }
 
-    // DIALOG HƯỚNG DẪN TÍNH NĂNG AI CHATBOT (Chỉ hiện 1 lần)
+    // DIALOG HƯỚNG DẪN TÍNH NĂNG AI CHATBOT LẦN ĐẦU
     if (showAIGuide) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { /* Để trống để bắt người dùng bấm nút mới tắt được */ },
+            onDismissRequest = { /* Để trống */ },
             properties = androidx.compose.ui.window.DialogProperties(
                 dismissOnBackPress = false,
                 dismissOnClickOutside = false
@@ -312,7 +370,6 @@ fun HomeScreen(
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Icon to ở giữa với nền tròn màu pastel
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -324,7 +381,6 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Tiêu đề
                     Text(
                         text = "Khám phá tính năng ẩn!",
                         fontWeight = FontWeight.ExtraBold,
@@ -335,7 +391,6 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Nội dung căn giữa, màu chữ dịu mắt
                     Text(
                         text = "Trợ lý AI Renshuu đã sẵn sàng! Bất cứ khi nào bạn có thắc mắc, hãy chạm vào chữ 'Renshuu' màu tím ở góc trái trên cùng để gọi AI nhé.",
                         fontSize = 15.sp,
@@ -346,11 +401,10 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Nút bấm bự, bo góc tròn xoe
                     Button(
                         onClick = {
                             showAIGuide = false
-                            prefs.edit().putBoolean("show_ai_guide", false).apply() // Ghi nhớ là đã xem
+                            prefs.edit().putBoolean("show_ai_guide", false).apply()
                         },
                         modifier = Modifier
                             .fillMaxWidth()
