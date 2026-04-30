@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +31,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    // 1. TĂNG SỐ TRANG LÊN 3
+    val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -48,8 +50,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 2. VẼ 3 DẤU CHẤM TRÒN
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(2) { index ->
+                    repeat(3) { index ->
                         val isSelected = pagerState.currentPage == index
                         Box(
                             modifier = Modifier
@@ -60,9 +63,14 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     }
                 }
 
-                if (pagerState.currentPage == 0) {
+                // 3. XỬ LÝ NÚT BẤM (Trang 0, 1 hiện "Tiếp tục", Trang 2 hiện "Bắt đầu")
+                if (pagerState.currentPage < 2) {
                     Button(
-                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                            }
+                        },
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Tiếp tục", fontWeight = FontWeight.Bold)
@@ -91,10 +99,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         ) { page ->
             when (page) {
                 0 -> OnboardingPage(
-                    icon = Icons.Filled.FlashOn, // Đổi logo tia chớp siêu tốc
+                    icon = Icons.Filled.FlashOn,
                     title = "Tạo thẻ siêu tốc!"
                 ) {
-                    // Nội dung trang 1 được thiết kế lại dạng List
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -121,7 +128,44 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         )
                     }
                 }
+
+                // 4. TRANG MỚI: GIỚI THIỆU GIA SƯ AI
                 1 -> OnboardingPage(
+                    icon = Icons.Filled.Lightbulb, // Icon bóng đèn sáng tạo
+                    title = "Gia sư AI cá nhân"
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Gặp từ khó hiểu? Cần thêm ví dụ minh họa? Hay chỉ đơn giản là muốn kiểm tra ngữ pháp?",
+                            fontSize = 16.sp,
+                            color = Color.DarkGray,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 24.sp,
+                            modifier = Modifier.padding(bottom = 20.dp)
+                        )
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "✨ Trợ lý AI của Renshuu luôn túc trực 24/7 để giải đáp mọi thắc mắc, giúp bạn hiểu sâu và nhớ lâu hơn bao giờ hết.",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(16.dp),
+                                lineHeight = 22.sp
+                            )
+                        }
+                    }
+                }
+
+                2 -> OnboardingPage(
                     icon = Icons.Filled.NotificationsActive,
                     title = "Đừng để trí nhớ phai mờ!"
                 ) {
@@ -139,7 +183,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     }
 }
 
-// Hàm dùng chung để vẽ khung chứa Icon và Title
+// Các hàm OnboardingPage và StepItem giữ nguyên không đổi
 @Composable
 fun OnboardingPage(icon: ImageVector, title: String, content: @Composable () -> Unit) {
     Column(
@@ -169,12 +213,10 @@ fun OnboardingPage(icon: ImageVector, title: String, content: @Composable () -> 
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))
-        // Phần nội dung (chữ hoặc list) sẽ được truyền vào đây
         content()
     }
 }
 
-// Widget để vẽ từng dòng bước 1, 2, 3 cực đẹp
 @Composable
 fun StepItem(number: Int, text: String) {
     Row(

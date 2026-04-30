@@ -18,6 +18,8 @@ import com.example.n.ui.screens.DeckDetailScreen
 import com.example.n.ui.screens.HomeScreen
 import com.example.n.ui.screens.StudyScreen
 import com.example.n.ui.screens.OnboardingScreen
+// THÊM IMPORT CHO CHATBOT
+import com.example.n.ui.screens.ChatbotScreen
 import com.example.n.utils.TokenManager
 import com.example.n.viewmodel.AuthViewModel
 import com.example.n.viewmodel.FlashcardViewModel
@@ -58,6 +60,9 @@ class MainActivity : ComponentActivity() {
                     var selectedDeck by remember { mutableStateOf<com.example.n.network.DeckResponse?>(null) }
                     var isStudying by remember { mutableStateOf(false) }
 
+                    // BIẾN TRẠNG THÁI MỚI: KIỂM SOÁT MÀN HÌNH CHATBOT
+                    var isChatbotOpen by remember { mutableStateOf(false) }
+
                     LaunchedEffect(newToken) {
                         if (newToken != null) {
                             tokenManager.saveToken(newToken!!)
@@ -80,7 +85,12 @@ class MainActivity : ComponentActivity() {
                                 onLoginSuccess = { /* Tự động xử lý */ }
                             )
                         } else {
-                            if (isStudying && selectedDeck != null) {
+                            // CHÈN THÊM NHÁNH CHO CHATBOT Ở ĐÂY
+                            if (isChatbotOpen) {
+                                ChatbotScreen(
+                                    onBack = { isChatbotOpen = false } // Bấm nút quay lại thì tắt Chatbot
+                                )
+                            } else if (isStudying && selectedDeck != null) {
                                 StudyScreen(
                                     token = currentToken ?: "",
                                     viewModel = flashcardViewModel,
@@ -106,6 +116,7 @@ class MainActivity : ComponentActivity() {
                                         currentToken = null
                                         selectedDeck = null
                                         isStudying = false
+                                        isChatbotOpen = false // Đăng xuất thì đóng mọi thứ
                                     },
                                     onDeckClick = { deck ->
                                         selectedDeck = deck
@@ -114,6 +125,10 @@ class MainActivity : ComponentActivity() {
                                         selectedDeck = deck
                                         isStudying = true
                                         flashcardViewModel.fetchStudyCards(currentToken ?: "", deck._id)
+                                    },
+                                    // TRUYỀN SỰ KIỆN MỞ CHATBOT VÀO HOMESCREEN
+                                    onChatbotClick = {
+                                        isChatbotOpen = true
                                     }
                                 )
                             }

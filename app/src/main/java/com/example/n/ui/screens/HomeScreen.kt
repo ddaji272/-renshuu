@@ -1,5 +1,6 @@
 package com.example.n.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,13 +33,19 @@ fun HomeScreen(
     flashcardViewModel: FlashcardViewModel = viewModel(),
     onLogout: () -> Unit,
     onDeckClick: (com.example.n.network.DeckResponse) -> Unit,
-    onStudyClick: (com.example.n.network.DeckResponse) -> Unit
+    onStudyClick: (com.example.n.network.DeckResponse) -> Unit,
+    onChatbotClick: () -> Unit // <-- THÊM PARAM NÀY ĐỂ KÍCH HOẠT CHATBOT
 ) {
     val decks by flashcardViewModel.decks.collectAsState()
     val isLoading by flashcardViewModel.isLoading.collectAsState()
 
     var showDialog by remember { mutableStateOf(false) }
     var deckName by remember { mutableStateOf("") }
+
+    // BIẾN CHO DIALOG THÔNG BÁO AI (Kiểm tra xem đã hiện lần nào chưa)
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("renshuu_prefs", Context.MODE_PRIVATE)
+    var showAIGuide by remember { mutableStateOf(prefs.getBoolean("show_ai_guide", true)) }
 
     LaunchedEffect(Unit) {
         if (token.isNotEmpty()) {
@@ -49,7 +57,16 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Renshuu", fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+                    // NÚT ẤN BÍ MẬT GỌI AI CHATBOT (Bọc vào text Renshuu)
+                    Text(
+                        text = "Renshuu",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 24.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onChatbotClick() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp) // Thêm lề cho dễ chạm tay
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -270,5 +287,81 @@ fun HomeScreen(
             shape = RoundedCornerShape(24.dp),
             containerColor = MaterialTheme.colorScheme.surface
         )
+    }
+
+    // DIALOG HƯỚNG DẪN TÍNH NĂNG AI CHATBOT (Chỉ hiện 1 lần)
+    if (showAIGuide) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { /* Để trống để bắt người dùng bấm nút mới tắt được */ },
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Icon to ở giữa với nền tròn màu pastel
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🤖", fontSize = 44.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Tiêu đề
+                    Text(
+                        text = "Khám phá tính năng ẩn!",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Nội dung căn giữa, màu chữ dịu mắt
+                    Text(
+                        text = "Trợ lý AI Renshuu đã sẵn sàng! Bất cứ khi nào bạn có thắc mắc, hãy chạm vào chữ 'Renshuu' màu tím ở góc trái trên cùng để gọi AI nhé.",
+                        fontSize = 15.sp,
+                        color = Color.Gray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Nút bấm bự, bo góc tròn xoe
+                    Button(
+                        onClick = {
+                            showAIGuide = false
+                            prefs.edit().putBoolean("show_ai_guide", false).apply() // Ghi nhớ là đã xem
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Tuyệt vời, tôi đã hiểu!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
