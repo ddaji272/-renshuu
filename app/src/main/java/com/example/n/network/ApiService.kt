@@ -1,5 +1,6 @@
 package com.example.n.network
 
+import com.example.n.BuildConfig
 import com.google.gson.annotations.SerializedName
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -26,7 +27,25 @@ data class GeneralResponse(val message: String)
 
 // Deck & Card
 data class DeckRequest(val name: String)
-data class DeckResponse(val _id: String, val name: String)
+data class DeckResponse(
+    val _id: String,
+    val name: String,
+    val algorithm: String = "SM2"   // <-- ADD THIS
+)
+
+data class UpdateDeckRequest(
+    val name: String? = null,
+    val algorithm: String? = null
+)
+
+data class OptimizeResponse(
+    val message: String,
+    val new_weights: List<Double>
+)
+
+data class RetentionRequest(
+    val request_retention: Double
+)
 
 // CardRequest: Thêm trường sound để gửi link âm thanh lên Backend
 data class CardRequest(
@@ -81,6 +100,13 @@ interface ApiService {
         @Header("Authorization") token: String
     ): List<DeckResponse>
 
+    @PUT("/api/deck/{id}")
+    suspend fun updateDeck(
+        @Header("Authorization") token: String,
+        @Path("id") deckId: String,
+        @Body request: UpdateDeckRequest
+    ): DeckResponse
+
     @DELETE("/api/deck/{id}")
     suspend fun deleteDeck(
         @Header("Authorization") token: String,
@@ -93,6 +119,12 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Body request: CardRequest
     ): CardResponse
+
+    @POST("/api/optimizer/optimize/{deckId}")
+    suspend fun optimizeDeck(
+        @Header("Authorization") token: String,
+        @Path("deckId") deckId: String
+    ): OptimizeResponse
 
     @DELETE("/api/card/{id}")
     suspend fun deleteCard(
@@ -117,7 +149,10 @@ interface ApiService {
 
 // 3. KHỞI TẠO CẤU HÌNH MẠNG (RETROFIT)
 object RetrofitClient {
-    private const val BASE_URL = "https://renshuu-backend.onrender.com/"
+    private val BASE_URL = if (BuildConfig.DEBUG)
+        BuildConfig.BASE_URL_DEBUG
+    else
+        BuildConfig.BASE_URL_RELEASE
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)

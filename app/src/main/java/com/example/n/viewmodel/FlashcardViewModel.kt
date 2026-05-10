@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class FlashcardViewModel : ViewModel() {
 
@@ -76,6 +77,24 @@ class FlashcardViewModel : ViewModel() {
                 println("Xóa Deck thành công!")
             } catch (e: Exception) {
                 println("Lỗi xóa Deck: ${e.message}")
+            }
+        }
+    }
+
+    fun updateDeckAlgorithm(token: String, deckId: String, algorithm: String) {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.updateDeck(
+                    "Bearer $token",
+                    deckId,
+                    UpdateDeckRequest(algorithm = algorithm)
+                )
+                // Refresh the local deck list with updated algorithm
+                _decks.value = _decks.value.map {
+                    if (it._id == deckId) it.copy(algorithm = response.algorithm) else it
+                }
+            } catch (e: Exception) {
+                println("Lỗi cập nhật thuật toán: ${e.message}")
             }
         }
     }
@@ -236,5 +255,56 @@ class FlashcardViewModel : ViewModel() {
         } finally {
             _isLoading.value = false
         }
+    }
+
+    private val _optimizeResult = MutableStateFlow<OptimizeResult?>(null)
+    val optimizeResult: StateFlow<OptimizeResult?> = _optimizeResult.asStateFlow()
+
+    private val _isOptimizing = MutableStateFlow(false)
+    val isOptimizing: StateFlow<Boolean> = _isOptimizing.asStateFlow()
+
+    data class OptimizeResult(
+        val success: Boolean,
+        val message: String,
+        val weights: List<Double> = emptyList()
+    )
+
+    fun optimizeDeck(token: String, deckId: String) {
+        viewModelScope.launch {
+            try {
+                _isOptimizing.value = true
+                _optimizeResult.value = null
+                val response = RetrofitClient.apiService.optimizeDeck(
+                    "Bearer $token",
+                    deckId
+                )
+                _optimizeResult.value = OptimizeResult(
+                    success = true,
+                    message = response.message,
+                    weights = response.new_weights
+                )
+            } catch (e: HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                _optimizeResult.value = OptimizeResult(
+                    success = false,
+                    message = when (e.code()) {
+                        400 -> "Chưa đủ dữ liệu để tối ưu (cần ít nhất 500 lần ôn tập)."
+                        404 -> "Không tìm thấy bộ bài."
+                        else -> "Lỗi máy chủ: ${e.code()}"
+                    }
+                )
+            } catch (e: Exception) {
+                _optimizeResult.value = OptimizeResult(
+                    success = false,
+                    message = "Lỗi kết nối. Vui lòng thử lại!"
+                )
+            } finally {
+                _isOptimizing.value = false
+            }
+        }
+    }
+
+    fun clearOptimizeResult() {
+        _optimizeResult.value = null
     }
 }

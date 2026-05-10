@@ -1,11 +1,14 @@
 package com.example.n.ui.screens
 
 import android.net.Uri
+import androidx.compose.foundation.border
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,12 +20,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Audiotrack // <-- IMPORT ICON LOA
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -44,6 +50,7 @@ fun DeckDetailScreen(
     val cards by viewModel.cards.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    var currentAlgorithm by remember { mutableStateOf(deck.algorithm ?: "SM2") }
     var showDialog by remember { mutableStateOf(false) }
     var frontText by remember { mutableStateOf("") }
     var backText by remember { mutableStateOf("") }
@@ -87,28 +94,300 @@ fun DeckDetailScreen(
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-            item { Text("Thư viện thẻ: ${cards.size}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp)) }
 
+            // HEADER: Số lượng thẻ
+            item {
+                Text(
+                    "Thư viện thẻ: ${cards.size}",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
+            // THUẬT TOÁN LÊN LỊCH ÔN TẬP
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Thuật toán lên lịch ôn tập",
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(
+                                    0.5.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .clip(RoundedCornerShape(10.dp))
+                        ) {
+                            listOf("SM2", "FSRS").forEach { alg ->
+                                val isSelected = currentAlgorithm == alg
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            currentAlgorithm = alg
+                                            viewModel.updateDeckAlgorithm(token, deck._id, alg)
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (alg == "FSRS") "FSRS ✦" else "SM-2",
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color.White
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (currentAlgorithm == "FSRS")
+                                "Thuật toán hiện đại — lên lịch chính xác hơn sau 500+ lần ôn tập."
+                            else
+                                "Thuật toán cổ điển — đơn giản và ổn định cho mọi kích thước bộ bài.",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(top = 8.dp),
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+
+            // FSRS OPTIMIZER UI — chỉ hiện khi đang dùng FSRS
+            if (currentAlgorithm == "FSRS") {
+                item {
+                    val isOptimizing by viewModel.isOptimizing.collectAsState()
+                    val optimizeResult by viewModel.optimizeResult.collectAsState()
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+
+                            // TIÊU ĐỀ
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "⚙️ Tối ưu hóa FSRS",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                "Chạy tối ưu để tính lại trọng số dựa trên lịch sử ôn tập thực tế của bạn. Cần ít nhất 500 lần ôn tập.",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                lineHeight = 18.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // NÚT CHẠY TỐI ƯU
+                            Button(
+                                onClick = {
+                                    viewModel.clearOptimizeResult()
+                                    viewModel.optimizeDeck(token, deck._id)
+                                },
+                                enabled = !isOptimizing,
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                if (isOptimizing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text("Đang tối ưu hóa...", color = Color.White, fontSize = 14.sp)
+                                } else {
+                                    Text("🚀 Chạy tối ưu hóa", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // KẾT QUẢ
+                            optimizeResult?.let { result ->
+                                Spacer(modifier = Modifier.height(16.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                if (result.success) {
+                                    // THÀNH CÔNG
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            "Tối ưu thành công!",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF4CAF50)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // BẢNG TRỌNG SỐ
+                                    Text(
+                                        "Trọng số mới (17 tham số):",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+
+                                    // HIỂN THỊ WEIGHTS THEO LƯỚI 3 CỘT
+                                    val chunked = result.weights.chunked(3)
+                                    chunked.forEachIndexed { rowIndex, rowWeights ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            rowWeights.forEachIndexed { colIndex, weight ->
+                                                val paramIndex = rowIndex * 3 + colIndex + 1
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                            RoundedCornerShape(8.dp)
+                                                        )
+                                                        .padding(vertical = 6.dp, horizontal = 4.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text(
+                                                            "w$paramIndex",
+                                                            fontSize = 10.sp,
+                                                            color = Color.Gray
+                                                        )
+                                                        Text(
+                                                            "%.3f".format(weight),
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            // Nếu hàng cuối không đủ 3 ô thì fill khoảng trống
+                                            repeat(3 - rowWeights.size) {
+                                                Box(modifier = Modifier.weight(1f))
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // THẤT BẠI
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.Warning,
+                                            contentDescription = null,
+                                            tint = Color(0xFFE53935),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            result.message,
+                                            fontSize = 13.sp,
+                                            color = Color(0xFFE53935),
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // DANH SÁCH THẺ TRỐNG
             if (cards.isEmpty()) {
-                item { Text("Bạn chưa có thẻ nào. Bấm dấu + để tạo tuyệt tác đầu tiên!", color = Color.Gray) }
+                item {
+                    Text(
+                        "Bạn chưa có thẻ nào. Bấm dấu + để tạo tuyệt tác đầu tiên!",
+                        color = Color.Gray
+                    )
+                }
             } else {
+                // DANH SÁCH THẺ
                 items(cards) { card ->
                     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(card.front, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(
+                                    card.front,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("💡 Đáp án: ${card.back}", color = Color.DarkGray)
-
+                                Text(
+                                    "💡 Đáp án: ${card.back}",
+                                    color = Color.DarkGray
+                                )
                                 Row(modifier = Modifier.padding(top = 6.dp)) {
                                     if (!card.imageUrl.isNullOrEmpty()) {
-                                        Text("🖼️ Có ảnh", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+                                        Text(
+                                            "🖼️ Có ảnh",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
                                     }
                                     if (!card.sound.isNullOrEmpty()) {
-                                        Text("🎵 Có âm thanh", color = Color(0xFF9C27B0), fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
+                                        Text(
+                                            "🎵 Có âm thanh",
+                                            color = Color(0xFF9C27B0),
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
                                     }
                                     if (!card.drawData.isNullOrEmpty() && card.drawData != "null") {
-                                        Text("✍️ Có nét vẽ", color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp)
+                                        Text(
+                                            "✍️ Có nét vẽ",
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                            fontSize = 12.sp
+                                        )
                                     }
                                 }
                             }
@@ -117,6 +396,11 @@ fun DeckDetailScreen(
                             }
                         }
                     }
+                }
+
+                // KHOẢNG CÁCH CUỐI ĐỂ FAB KHÔNG CHE THẺ CUỐI
+                item {
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }

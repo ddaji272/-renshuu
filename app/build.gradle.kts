@@ -32,6 +32,9 @@ android {
         // =======================================================
         val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+
+        buildConfigField("String", "BASE_URL_DEBUG", "\"http://10.0.2.2:5000/\"")
+        buildConfigField("String", "BASE_URL_RELEASE", "\"https://renshuu-backend.onrender.com/\"")
     }
 
     buildTypes {
@@ -62,6 +65,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.foundation)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
