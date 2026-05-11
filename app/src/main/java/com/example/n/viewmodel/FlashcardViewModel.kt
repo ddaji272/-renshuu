@@ -81,6 +81,24 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
+    fun updateDeckName(token: String, deckId: String, name: String) {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.updateDeck(
+                    "Bearer $token",
+                    deckId,
+                    UpdateDeckRequest(name = name)
+                )
+                // Update local deck list so HomeScreen reflects the change
+                _decks.value = _decks.value.map {
+                    if (it._id == deckId) it.copy(name = response.name) else it
+                }
+            } catch (e: Exception) {
+                println("Lỗi cập nhật tên bộ bài: ${e.message}")
+            }
+        }
+    }
+
     fun updateDeckAlgorithm(token: String, deckId: String, algorithm: String) {
         viewModelScope.launch {
             try {
@@ -137,6 +155,39 @@ class FlashcardViewModel : ViewModel() {
                 onSuccess()
             } catch (e: Exception) {
                 println("Lỗi thêm thẻ pro: ${e.message}")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun updateCard(
+        token: String,
+        cardId: String,
+        deckId: String,
+        front: String,
+        back: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val response = RetrofitClient.apiService.updateCard(
+                    "Bearer $token",
+                    cardId,
+                    CardRequest(
+                        deckId = deckId,
+                        front = front,
+                        back = back,
+                    )
+                )
+                // Update local card list
+                _cards.value = _cards.value.map {
+                    if (it._id == cardId) response else it
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                println("Lỗi cập nhật thẻ: ${e.message}")
             } finally {
                 _isLoading.value = false
             }

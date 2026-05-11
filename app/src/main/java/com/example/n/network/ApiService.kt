@@ -120,6 +120,13 @@ interface ApiService {
         @Body request: CardRequest
     ): CardResponse
 
+    @PUT("/api/card/{id}")
+    suspend fun updateCard(
+        @Header("Authorization") token: String,
+        @Path("id") cardId: String,
+        @Body request: CardRequest
+    ): CardResponse
+
     @POST("/api/optimizer/optimize/{deckId}")
     suspend fun optimizeDeck(
         @Header("Authorization") token: String,

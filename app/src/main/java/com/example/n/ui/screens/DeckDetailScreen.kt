@@ -1,13 +1,11 @@
 package com.example.n.ui.screens
 
 import android.net.Uri
-import androidx.compose.foundation.border
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -15,17 +13,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Audiotrack // <-- IMPORT ICON LOA
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,8 +39,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.n.network.CardResponse
 import com.example.n.network.DeckResponse
 import com.example.n.viewmodel.FlashcardViewModel
 
@@ -49,11 +57,25 @@ fun DeckDetailScreen(
 ) {
     val cards by viewModel.cards.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isOptimizing by viewModel.isOptimizing.collectAsState()
+    val optimizeResult by viewModel.optimizeResult.collectAsState()
 
+    // DECK NAME EDITING
+    var isEditingName by remember { mutableStateOf(false) }
+    var deckNameText by remember { mutableStateOf(deck.name) }
+
+    // ALGORITHM
     var currentAlgorithm by remember { mutableStateOf(deck.algorithm ?: "SM2") }
+
+    // CREATE CARD DIALOG
     var showDialog by remember { mutableStateOf(false) }
     var frontText by remember { mutableStateOf("") }
     var backText by remember { mutableStateOf("") }
+
+    // EDIT CARD DIALOG
+    var editingCard by remember { mutableStateOf<CardResponse?>(null) }
+    var editFrontText by remember { mutableStateOf("") }
+    var editBackText by remember { mutableStateOf("") }
 
     // CÔNG CỤ CHỌN ẢNH
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -80,20 +102,104 @@ fun DeckDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(deck.name, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                title = {
+                    if (isEditingName) {
+                        TextField(
+                            value = deckNameText,
+                            onValueChange = { deckNameText = it },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                            textStyle = LocalTextStyle.current.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (deckNameText.isNotBlank()) {
+                                        viewModel.updateDeckName(token, deck._id, deckNameText)
+                                    }
+                                    isEditingName = false
+                                }
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { isEditingName = true }
+                        ) {
+                            Text(
+                                deckNameText,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Sửa tên",
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.Gray
+                            )
+                        }
+                    }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                navigationIcon = {
+                    if (isEditingName) {
+                        IconButton(onClick = {
+                            deckNameText = deck.name
+                            isEditingName = false
+                        }) {
+                            Icon(Icons.Filled.Close, "Hủy")
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    }
+                },
+                actions = {
+                    if (isEditingName) {
+                        IconButton(onClick = {
+                            if (deckNameText.isNotBlank()) {
+                                viewModel.updateDeckName(token, deck._id, deckNameText)
+                            }
+                            isEditingName = false
+                        }) {
+                            Icon(
+                                Icons.Filled.Check,
+                                "Lưu",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }, containerColor = MaterialTheme.colorScheme.primary) {
+            FloatingActionButton(
+                onClick = { showDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Thêm thẻ", tint = Color.White)
             }
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
 
             // HEADER: Số lượng thẻ
             item {
@@ -176,9 +282,6 @@ fun DeckDetailScreen(
             // FSRS OPTIMIZER UI — chỉ hiện khi đang dùng FSRS
             if (currentAlgorithm == "FSRS") {
                 item {
-                    val isOptimizing by viewModel.isOptimizing.collectAsState()
-                    val optimizeResult by viewModel.optimizeResult.collectAsState()
-
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -192,14 +295,12 @@ fun DeckDetailScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
 
                             // TIÊU ĐỀ
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "⚙️ Tối ưu hóa FSRS",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Text(
+                                "⚙️ Tối ưu hóa FSRS",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
 
                             Spacer(modifier = Modifier.height(4.dp))
 
@@ -219,7 +320,9 @@ fun DeckDetailScreen(
                                     viewModel.optimizeDeck(token, deck._id)
                                 },
                                 enabled = !isOptimizing,
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary
@@ -232,9 +335,18 @@ fun DeckDetailScreen(
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Đang tối ưu hóa...", color = Color.White, fontSize = 14.sp)
+                                    Text(
+                                        "Đang tối ưu hóa...",
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
                                 } else {
-                                    Text("🚀 Chạy tối ưu hóa", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "🚀 Chạy tối ưu hóa",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
 
@@ -287,10 +399,15 @@ fun DeckDetailScreen(
                                                     modifier = Modifier
                                                         .weight(1f)
                                                         .background(
-                                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                            MaterialTheme.colorScheme.primaryContainer.copy(
+                                                                alpha = 0.5f
+                                                            ),
                                                             RoundedCornerShape(8.dp)
                                                         )
-                                                        .padding(vertical = 6.dp, horizontal = 4.dp),
+                                                        .padding(
+                                                            vertical = 6.dp,
+                                                            horizontal = 4.dp
+                                                        ),
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -391,6 +508,19 @@ fun DeckDetailScreen(
                                     }
                                 }
                             }
+                            // EDIT BUTTON
+                            IconButton(onClick = {
+                                editingCard = card
+                                editFrontText = card.front
+                                editBackText = card.back
+                            }) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    "Sửa thẻ",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            // DELETE BUTTON
                             IconButton(onClick = { viewModel.deleteCard(token, card._id) }) {
                                 Icon(Icons.Filled.Delete, "Xóa thẻ", tint = Color.Red)
                             }
@@ -406,6 +536,7 @@ fun DeckDetailScreen(
         }
     }
 
+    // DIALOG TẠO THẺ MỚI
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -431,16 +562,31 @@ fun DeckDetailScreen(
                     HorizontalDivider(thickness = 1.dp, color = Color.LightGray)
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Đính kèm (Tùy chọn)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Đính kèm (Tùy chọn)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // NÚT CHỌN ẢNH
                     Button(
-                        onClick = { photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedImageUri == null) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = if (selectedImageUri == null) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                            containerColor = if (selectedImageUri == null)
+                                MaterialTheme.colorScheme.secondaryContainer
+                            else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (selectedImageUri == null)
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            else MaterialTheme.colorScheme.onPrimaryContainer
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -456,8 +602,12 @@ fun DeckDetailScreen(
                         onClick = { audioPickerLauncher.launch("audio/*") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedSoundUri == null) MaterialTheme.colorScheme.secondaryContainer else Color(0xFFF3E5F5),
-                            contentColor = if (selectedSoundUri == null) MaterialTheme.colorScheme.onSecondaryContainer else Color(0xFF6A1B9A)
+                            containerColor = if (selectedSoundUri == null)
+                                MaterialTheme.colorScheme.secondaryContainer
+                            else Color(0xFFF3E5F5),
+                            contentColor = if (selectedSoundUri == null)
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            else Color(0xFF6A1B9A)
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -469,33 +619,39 @@ fun DeckDetailScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text("Ghi chú nét vẽ (Tùy chọn)", fontSize = 13.sp, color = Color.DarkGray)
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .padding(top = 4.dp)
-                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
-                        .background(Color(0xFFFAFAFA), RoundedCornerShape(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .padding(top = 4.dp)
+                            .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFAFAFA), RoundedCornerShape(12.dp))
                     ) {
                         Canvas(
-                            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                                detectDragGestures(
-                                    onDragStart = { offset ->
-                                        drawPath.moveTo(offset.x, offset.y)
-                                        pathTrigger++ // Ép vẽ lại
-                                    },
-                                    onDrag = { change, _ ->
-                                        drawPath.lineTo(change.position.x, change.position.y)
-                                        pathTrigger++ // Ép vẽ lại
-                                    }
-                                )
-                            }
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            drawPath.moveTo(offset.x, offset.y)
+                                            pathTrigger++
+                                        },
+                                        onDrag = { change, _ ->
+                                            drawPath.lineTo(change.position.x, change.position.y)
+                                            pathTrigger++
+                                        }
+                                    )
+                                }
                         ) {
-                            val trigger = pathTrigger // Lắng nghe cò súng
+                            val trigger = pathTrigger
                             drawPath(path = drawPath, color = Color.Black, style = Stroke(width = 8f))
                         }
                     }
 
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
                         TextButton(onClick = {
                             drawPath.reset()
                             pathTrigger++
@@ -510,8 +666,7 @@ fun DeckDetailScreen(
                     onClick = {
                         if (frontText.isNotBlank() && backText.isNotBlank()) {
                             val imgUrl = selectedImageUri?.toString()
-                            val soundUrl = selectedSoundUri?.toString() // Gán link âm thanh
-
+                            val soundUrl = selectedSoundUri?.toString()
                             viewModel.addCard(
                                 token = token,
                                 deckId = deck._id,
@@ -520,11 +675,15 @@ fun DeckDetailScreen(
                                 type = "TEXT",
                                 imageUrl = imgUrl,
                                 drawData = "CanvasData",
-                                sound = soundUrl // Đẩy link vào ViewModel
+                                sound = soundUrl
                             ) {
                                 showDialog = false
-                                // Reset hết sạch sành sanh sau khi lưu thành công
-                                frontText = ""; backText = ""; selectedImageUri = null; selectedSoundUri = null; drawPath.reset(); pathTrigger++
+                                frontText = ""
+                                backText = ""
+                                selectedImageUri = null
+                                selectedSoundUri = null
+                                drawPath.reset()
+                                pathTrigger++
                             }
                         }
                     },
@@ -535,7 +694,64 @@ fun DeckDetailScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) { Text("Hủy", color = Color.Gray) }
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Hủy", color = Color.Gray)
+                }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    // DIALOG CHỈNH SỬA THẺ
+    editingCard?.let { card ->
+        AlertDialog(
+            onDismissRequest = { editingCard = null },
+            title = { Text("Chỉnh sửa thẻ", fontWeight = FontWeight.ExtraBold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editFrontText,
+                        onValueChange = { editFrontText = it },
+                        label = { Text("Câu hỏi / Từ vựng (Mặt trước)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editBackText,
+                        onValueChange = { editBackText = it },
+                        label = { Text("Đáp án (Mặt sau)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        minLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editFrontText.isNotBlank() && editBackText.isNotBlank()) {
+                            viewModel.updateCard(
+                                token = token,
+                                cardId = card._id,
+                                deckId = deck._id,
+                                front = editFrontText,
+                                back = editBackText,
+                            ) {
+                                editingCard = null
+                            }
+                        }
+                    },
+                    enabled = !isLoading && editFrontText.isNotBlank() && editBackText.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (isLoading) "Đang lưu..." else "Lưu thay đổi")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingCard = null }) {
+                    Text("Hủy", color = Color.Gray)
+                }
             },
             shape = RoundedCornerShape(24.dp)
         )
