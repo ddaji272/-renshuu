@@ -27,10 +27,18 @@ data class GeneralResponse(val message: String)
 
 // Deck & Card
 data class DeckRequest(val name: String)
+
+data class FsrsParams(
+    val weights: List<Double> = emptyList(),
+    val request_retention: Double = 0.9,
+    val maximum_interval: Int = 36500
+)
+
 data class DeckResponse(
     val _id: String,
     val name: String,
-    val algorithm: String = "SM2"   // <-- ADD THIS
+    val algorithm: String = "SM2",
+    val fsrs_params: FsrsParams? = null
 )
 
 data class UpdateDeckRequest(
@@ -163,7 +171,7 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(500, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 

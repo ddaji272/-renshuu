@@ -3,6 +3,7 @@ package com.example.n.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,12 +26,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +67,10 @@ fun DeckDetailScreen(
 
     // ALGORITHM
     var currentAlgorithm by remember { mutableStateOf(deck.algorithm ?: "SM2") }
+
+    // TOGGLE STATES FOR WEIGHTS
+    var showOptimizeResultWeights by remember { mutableStateOf(false) }
+    var showCurrentWeights by remember { mutableStateOf(false) }
 
     // CREATE CARD DIALOG
     var showDialog by remember { mutableStateOf(false) }
@@ -279,7 +284,7 @@ fun DeckDetailScreen(
                 }
             }
 
-            // FSRS OPTIMIZER UI — chỉ hiện khi đang dùng FSRS
+            // FSRS OPTIMIZER UI
             if (currentAlgorithm == "FSRS") {
                 item {
                     Card(
@@ -318,6 +323,7 @@ fun DeckDetailScreen(
                                 onClick = {
                                     viewModel.clearOptimizeResult()
                                     viewModel.optimizeDeck(token, deck._id)
+                                    showOptimizeResultWeights = true // Mở rộng kết quả khi chạy
                                 },
                                 enabled = !isOptimizing,
                                 modifier = Modifier
@@ -357,7 +363,6 @@ fun DeckDetailScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 if (result.success) {
-                                    // THÀNH CÔNG
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
                                             Icons.Filled.CheckCircle,
@@ -376,58 +381,75 @@ fun DeckDetailScreen(
 
                                     Spacer(modifier = Modifier.height(12.dp))
 
-                                    // BẢNG TRỌNG SỐ
-                                    Text(
-                                        "Trọng số mới (17 tham số):",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
+                                    // TOGGLE OPTIMIZED WEIGHTS
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { showOptimizeResultWeights = !showOptimizeResultWeights }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "Xem trọng số mới",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Icon(
+                                            if (showOptimizeResultWeights) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                            contentDescription = "Toggle Weights",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
 
-                                    // HIỂN THỊ WEIGHTS THEO LƯỚI 3 CỘT
-                                    val chunked = result.weights.chunked(3)
-                                    chunked.forEachIndexed { rowIndex, rowWeights ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            rowWeights.forEachIndexed { colIndex, weight ->
-                                                val paramIndex = rowIndex * 3 + colIndex + 1
-                                                Box(
+                                    AnimatedVisibility(visible = showOptimizeResultWeights) {
+                                        Column(modifier = Modifier.padding(top = 8.dp)) {
+                                            val chunked = result.weights.chunked(3)
+                                            chunked.forEachIndexed { rowIndex, rowWeights ->
+                                                Row(
                                                     modifier = Modifier
-                                                        .weight(1f)
-                                                        .background(
-                                                            MaterialTheme.colorScheme.primaryContainer.copy(
-                                                                alpha = 0.5f
-                                                            ),
-                                                            RoundedCornerShape(8.dp)
-                                                        )
-                                                        .padding(
-                                                            vertical = 6.dp,
-                                                            horizontal = 4.dp
-                                                        ),
-                                                    contentAlignment = Alignment.Center
+                                                        .fillMaxWidth()
+                                                        .padding(bottom = 4.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                        Text(
-                                                            "w$paramIndex",
-                                                            fontSize = 10.sp,
-                                                            color = Color.Gray
-                                                        )
-                                                        Text(
-                                                            "%.3f".format(weight),
-                                                            fontSize = 12.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
+                                                    rowWeights.forEachIndexed { colIndex, weight ->
+                                                        val paramIndex = rowIndex * 3 + colIndex + 1
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .weight(1f)
+                                                                .background(
+                                                                    MaterialTheme.colorScheme.primaryContainer.copy(
+                                                                        alpha = 0.5f
+                                                                    ),
+                                                                    RoundedCornerShape(8.dp)
+                                                                )
+                                                                .padding(
+                                                                    vertical = 6.dp,
+                                                                    horizontal = 4.dp
+                                                                ),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                                Text(
+                                                                    "w$paramIndex",
+                                                                    fontSize = 10.sp,
+                                                                    color = Color.Gray
+                                                                )
+                                                                Text(
+                                                                    "%.3f".format(weight),
+                                                                    fontSize = 12.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = MaterialTheme.colorScheme.primary
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    repeat(3 - rowWeights.size) {
+                                                        Box(modifier = Modifier.weight(1f))
                                                     }
                                                 }
-                                            }
-                                            // Nếu hàng cuối không đủ 3 ô thì fill khoảng trống
-                                            repeat(3 - rowWeights.size) {
-                                                Box(modifier = Modifier.weight(1f))
                                             }
                                         }
                                     }
@@ -453,6 +475,143 @@ fun DeckDetailScreen(
                         }
                     }
                 }
+
+                // HIỂN THỊ TRỌNG SỐ HIỆN TẠI
+                item {
+                    val weights = deck.fsrs_params?.weights ?: emptyList()
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "📊 Trọng số FSRS hiện tại",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                // BADGE
+                                val isDefault = weights.isEmpty() ||
+                                        weights == listOf(0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01,
+                                    1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61)
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (isDefault) Color(0xFFFFF3E0) else Color(0xFFE8F5E9),
+                                            RoundedCornerShape(99.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        if (isDefault) "Mặc định" else "Đã tối ưu",
+                                        fontSize = 11.sp,
+                                        color = if (isDefault) Color(0xFFE65100) else Color(0xFF2E7D32),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                "Retention mục tiêu: ${((deck.fsrs_params?.request_retention ?: 0.9) * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (weights.isEmpty()) {
+                                Text(
+                                    "Chưa có trọng số. Chạy tối ưu hóa để tạo trọng số cá nhân hóa.",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray,
+                                    lineHeight = 18.sp
+                                )
+                            } else {
+                                // TOGGLE CURRENT WEIGHTS
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { showCurrentWeights = !showCurrentWeights }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "Xem chi tiết trọng số",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Icon(
+                                        if (showCurrentWeights) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                        contentDescription = "Toggle Weights",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                AnimatedVisibility(visible = showCurrentWeights) {
+                                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                                        val chunked = weights.chunked(3)
+                                        chunked.forEachIndexed { rowIndex, rowWeights ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(bottom = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                rowWeights.forEachIndexed { colIndex, weight ->
+                                                    val paramIndex = rowIndex * 3 + colIndex + 1
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .background(
+                                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                                RoundedCornerShape(8.dp)
+                                                            )
+                                                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Text(
+                                                                "w$paramIndex",
+                                                                fontSize = 10.sp,
+                                                                color = Color.Gray
+                                                            )
+                                                            Text(
+                                                                "%.3f".format(weight),
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.primary
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                repeat(3 - rowWeights.size) {
+                                                    Box(modifier = Modifier.weight(1f))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // DANH SÁCH THẺ TRỐNG
@@ -466,7 +625,9 @@ fun DeckDetailScreen(
             } else {
                 // DANH SÁCH THẺ
                 items(cards) { card ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Card(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)) {
                         Row(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
