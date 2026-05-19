@@ -171,7 +171,7 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(500, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.MINUTES)  // give optimizer enough time
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
