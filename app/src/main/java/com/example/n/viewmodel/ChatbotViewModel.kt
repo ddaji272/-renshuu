@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
-import com.example.n.BuildConfig // Đảm bảo import đúng BuildConfig chứa API Key
+import com.example.n.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,10 +26,14 @@ class ChatbotViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // Khởi tạo mô hình Gemini
+    // SỬ DỤNG gemini-2.5-flash GIỐNG NHƯ TÍNH NĂNG TẠO THẺ ĐANG HOẠT ĐỘNG
     private val generativeModel = GenerativeModel(
-        modelName = "gemini-pro", // Dùng bản pro cho ổn định
-        apiKey = BuildConfig.GEMINI_API_KEY
+        modelName = "gemini-2.5-flash",
+        apiKey = BuildConfig.GEMINI_API_KEY,
+        // Cấp thêm chỉ thị để AI nhập vai xuất sắc hơn
+        systemInstruction = content {
+            text("Bạn là Trợ lý AI của ứng dụng học tập Renshuu. Hãy trả lời ngắn gọn, thân thiện và tập trung vào việc hỗ trợ người dùng học tập.")
+        }
     )
 
     // Khởi tạo phiên chat (để AI nhớ được bối cảnh cuộc trò chuyện)
@@ -69,7 +73,9 @@ class ChatbotViewModel : ViewModel() {
                 _messages.value = _messages.value + ChatMessage(aiReply, isFromUser = false)
             } catch (e: Exception) {
                 e.printStackTrace()
-                _messages.value = _messages.value + ChatMessage("Lỗi kết nối. Vui lòng thử lại sau.", isFromUser = false)
+                // Bắt lỗi in thẳng ra màn hình nếu Google từ chối
+                val realError = e.message ?: e.toString()
+                _messages.value = _messages.value + ChatMessage("Lỗi hệ thống: $realError", isFromUser = false)
             } finally {
                 // 5. Tắt trạng thái loading
                 _isLoading.value = false
