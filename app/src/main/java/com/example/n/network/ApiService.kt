@@ -2,15 +2,19 @@ package com.example.n.network
 
 import com.example.n.BuildConfig
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 import java.util.concurrent.TimeUnit
 
@@ -55,7 +59,7 @@ data class RetentionRequest(
     val request_retention: Double
 )
 
-// CardRequest: Thêm trường sound để gửi link âm thanh lên Backend
+// CardRequest: Chỉ dùng cho AI Quick Add (không có file đính kèm)
 data class CardRequest(
     @SerializedName("deckID") val deckId: String,
     val front: String,
@@ -63,16 +67,16 @@ data class CardRequest(
     val type: String = "TEXT",
     @SerializedName("image") val imageUrl: String? = null,
     val drawData: String? = null,
-    val sound: String? = null // <-- THÊM DÒNG NÀY ĐỂ GỬI ĐI
+    val sound: String? = null
 )
 
-// CardResponse: Thêm trường sound để nhận link âm thanh từ Backend về
+// CardResponse: Nhận dữ liệu thẻ từ Backend
 data class CardResponse(
     val _id: String,
     val front: String,
     val back: String,
     val type: String? = "TEXT",
-    val imageUrl: String? = null,
+    @SerializedName("image") val imageUrl: String? = null,
     val drawData: String? = null,
     val sound: String? = null
 )
@@ -122,17 +126,37 @@ interface ApiService {
     ): GeneralResponse
 
     // CARD ROUTES
+    // Dùng cho tạo thẻ CÓ đính kèm ảnh/âm thanh từ máy người dùng (Multipart)
+    @Multipart
     @POST("/api/card")
     suspend fun createCard(
+        @Header("Authorization") token: String,
+        @Part("deckID") deckId: RequestBody,
+        @Part("front") front: RequestBody,
+        @Part("back") back: RequestBody,
+        @Part("type") type: RequestBody,
+        @Part image: MultipartBody.Part?,
+        @Part sound: MultipartBody.Part?
+    ): CardResponse
+
+    // Dùng cho tạo thẻ KHÔNG có file đính kèm (AI Quick Add)
+    @POST("/api/card")
+    suspend fun createCardJson(
         @Header("Authorization") token: String,
         @Body request: CardRequest
     ): CardResponse
 
-    @PUT("/api/card/{id}")
+    // Dùng cho cập nhật thẻ CÓ đính kèm ảnh/âm thanh từ máy người dùng (Multipart)
+    @Multipart
+    @PUT("/api/card/{cardId}")
     suspend fun updateCard(
         @Header("Authorization") token: String,
-        @Path("id") cardId: String,
-        @Body request: CardRequest
+        @Path("cardId") cardId: String,
+        @Part("deckID") deckId: RequestBody,
+        @Part("front") front: RequestBody,
+        @Part("back") back: RequestBody,
+        @Part image: MultipartBody.Part?,
+        @Part sound: MultipartBody.Part?
     ): CardResponse
 
     @POST("/api/optimizer/optimize/{deckId}")
@@ -171,7 +195,7 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.MINUTES)  // give optimizer enough time
+        .readTimeout(15, TimeUnit.MINUTES)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 

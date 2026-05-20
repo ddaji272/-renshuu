@@ -58,19 +58,17 @@ fun StudyScreen(
     val scratchPath = remember { Path() }
     var scratchTrigger by remember { mutableIntStateOf(0) }
 
-    // BIẾN CHO TÍNH NĂNG VUỐT
     var offsetX by remember { mutableFloatStateOf(0f) }
     var showSwipeHint by remember { mutableStateOf(false) }
     var hasSeenHint by remember { mutableStateOf(false) }
 
-    // Tính toán độ rõ nét của Nhãn dán dựa trên lực vuốt
-    val rightSwipeAlpha = (offsetX / 150f).coerceIn(0f, 1f) // Vuốt PHẢI -> TỐT
-    val leftSwipeAlpha = (-offsetX / 150f).coerceIn(0f, 1f) // Vuốt TRÁI -> LẶP LẠI
+    val rightSwipeAlpha = (offsetX / 150f).coerceIn(0f, 1f)
+    val leftSwipeAlpha = (-offsetX / 150f).coerceIn(0f, 1f)
 
     LaunchedEffect(isFlipped) {
         if (isFlipped && !hasSeenHint) {
             showSwipeHint = true
-            delay(3000) // Rút ngắn thời gian hiện hướng dẫn xuống 3s cho đỡ vướng
+            delay(3000)
             showSwipeHint = false
             hasSeenHint = true
         } else if (!isFlipped) {
@@ -97,19 +95,32 @@ fun StudyScreen(
         }
     }
 
+    // ĐÃ FIX: Hàm xử lý âm thanh thông minh hơn
     fun handleSpeech(text: String, soundUrl: String?, isTtsReady: Boolean) {
-        if (!soundUrl.isNullOrEmpty()) {
+        // Loại bỏ rủi ro chuỗi "null" từ API gửi về
+        val hasCustomAudio = !soundUrl.isNullOrEmpty() && soundUrl != "null"
+
+        if (hasCustomAudio) {
             try {
-                MediaPlayer().apply {
-                    setDataSource(soundUrl)
-                    prepareAsync()
-                    setOnPreparedListener { start() }
-                    setOnCompletionListener { release() }
+                val mediaPlayer = MediaPlayer()
+                mediaPlayer.setDataSource(soundUrl)
+                mediaPlayer.prepareAsync()
+
+                mediaPlayer.setOnPreparedListener { it.start() }
+
+                mediaPlayer.setOnCompletionListener { it.release() }
+
+                // Nếu file S3 lỗi mạng hoặc hỏng, quay xe dùng TTS ngay
+                mediaPlayer.setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    if (isTtsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+                    true
                 }
             } catch (e: Exception) {
                 if (isTtsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
             }
         } else {
+            // Không có custom audio thì dùng giọng Google hệ thống
             if (isTtsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
         }
     }
@@ -150,29 +161,26 @@ fun StudyScreen(
                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
 
-                // LỚP 1: XỬ LÝ VUỐT (Chịu trách nhiệm di chuyển thẻ theo tay)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(420.dp)
-                        .offset { IntOffset(offsetX.roundToInt(), 0) } // Di chuyển ngang
+                        .offset { IntOffset(offsetX.roundToInt(), 0) }
                         .graphicsLayer {
-                            rotationZ = offsetX / 25f // Xoay nghiêng thẻ khi vuốt
+                            rotationZ = offsetX / 25f
                         }
                         .pointerInput(isFlipped) {
                             if (isFlipped) {
                                 detectHorizontalDragGestures(
                                     onDragEnd = {
                                         if (offsetX > 150f) {
-                                            // VUỐT PHẢI -> Gửi điểm 2 (Tốt)
                                             viewModel.submitReview(token, currentCard._id, 2)
                                             isFlipped = false
                                         } else if (offsetX < -150f) {
-                                            // VUỐT TRÁI -> Gửi điểm 0 (Lặp lại)
                                             viewModel.submitReview(token, currentCard._id, 0)
                                             isFlipped = false
                                         } else {
-                                            offsetX = 0f // Trả về giữa nếu vuốt nhẹ
+                                            offsetX = 0f
                                         }
                                     }
                                 ) { change, dragAmount ->
@@ -183,7 +191,6 @@ fun StudyScreen(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    // LỚP 2: XỬ LÝ LẬT 3D VÀ GIAO DIỆN THẺ
                     Card(
                         modifier = Modifier
                             .fillMaxSize()
@@ -252,7 +259,6 @@ fun StudyScreen(
                                 }
                             } else {
                                 // MẶT SAU
-                                // Bọc một Box có rotationY = 180f để lật ngược nội dung lại cho xuôi chữ
                                 Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
                                     IconButton(
                                         onClick = { handleSpeech(currentCard.back, currentCard.sound, tts != null) },
@@ -266,23 +272,23 @@ fun StudyScreen(
                                     Column(
                                         modifier = Modifier
                                             .align(Alignment.Center)
-                                            .padding(top = 40.dp, bottom = 20.dp) // Chừa chỗ cho nút loa và nhãn dán
+                                            .padding(top = 40.dp, bottom = 20.dp)
                                             .fillMaxHeight()
                                             .verticalScroll(scrollState),
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center // Căn giữa nội dung nếu ngắn
+                                        verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = currentCard.back,
-                                            fontSize = 20.sp, // Giảm cỡ chữ xuống một chút để dễ đọc
+                                            fontSize = 20.sp,
                                             fontWeight = FontWeight.Medium,
-                                            textAlign = TextAlign.Start, // Căn trái cho các đoạn văn dài
-                                            lineHeight = 32.sp, // Tăng khoảng cách dòng để không bị đè
+                                            textAlign = TextAlign.Start,
+                                            lineHeight = 32.sp,
                                             color = Color(0xFF333333),
                                             modifier = Modifier.padding(horizontal = 8.dp)
                                         )
 
-                                        if (!currentCard.imageUrl.isNullOrEmpty()) {
+                                        if (!currentCard.imageUrl.isNullOrEmpty() && currentCard.imageUrl != "null") {
                                             Spacer(Modifier.height(16.dp))
                                             AsyncImage(
                                                 model = currentCard.imageUrl,
@@ -296,9 +302,7 @@ fun StudyScreen(
                                         }
                                     }
 
-                                    // HIỆU ỨNG NHÃN DÁN (STAMPS)
                                     if (isFlipped) {
-                                        // Nhãn TỐT (Xanh lá) - Nằm góc trên Trái (Vuốt sang phải sẽ thấy)
                                         Text(
                                             text = "TỐT",
                                             color = Color(0xFF4CAF50),
@@ -317,7 +321,6 @@ fun StudyScreen(
                                                 .padding(horizontal = 12.dp, vertical = 4.dp)
                                         )
 
-                                        // Nhãn LẶP LẠI (Đỏ) - Nằm góc trên Phải (Vuốt sang trái sẽ thấy)
                                         Text(
                                             text = "LẶP LẠI",
                                             color = Color(0xFFE53935),
@@ -337,7 +340,6 @@ fun StudyScreen(
                                         )
                                     }
 
-                                    // GIAO DIỆN HƯỚNG DẪN VUỐT CHUẨN DESIGN
                                     val hintAlpha by animateFloatAsState(
                                         targetValue = if (showSwipeHint) 1f else 0f,
                                         animationSpec = tween(800),
@@ -353,7 +355,6 @@ fun StudyScreen(
                                                 .graphicsLayer { alpha = hintAlpha },
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            // Nút Lặp lại (Vuốt Trái)
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
@@ -367,7 +368,6 @@ fun StudyScreen(
                                                 Text("👈", fontSize = 14.sp)
                                             }
 
-                                            // Nút Tốt (Vuốt Phải)
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier

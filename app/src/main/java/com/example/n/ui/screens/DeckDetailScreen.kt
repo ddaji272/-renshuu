@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +64,9 @@ fun DeckDetailScreen(
     val isOptimizing by viewModel.isOptimizing.collectAsState()
     val optimizeResult by viewModel.optimizeResult.collectAsState()
 
+    // Lấy context để truyền vào addCard/updateCard cho việc đọc file URI
+    val context = LocalContext.current
+
     var isEditingName by remember { mutableStateOf(false) }
     var deckNameText by remember { mutableStateOf(deck.name) }
     var currentAlgorithm by remember { mutableStateOf(deck.algorithm ?: "SM2") }
@@ -77,6 +81,7 @@ fun DeckDetailScreen(
     var editFrontText by remember { mutableStateOf("") }
     var editBackText by remember { mutableStateOf("") }
 
+    // URI thật từ máy người dùng (dùng cho tạo thẻ mới)
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -92,7 +97,6 @@ fun DeckDetailScreen(
     val drawPath = remember { Path() }
     var pathTrigger by remember { mutableIntStateOf(0) }
 
-    // Trạng thái cho Pull to Refresh
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
 
@@ -100,7 +104,6 @@ fun DeckDetailScreen(
         viewModel.fetchCards(token, deck._id)
     }
 
-    // Tắt vòng xoay khi tải xong
     LaunchedEffect(isLoading) {
         if (!isLoading) {
             isRefreshing = false
@@ -203,7 +206,6 @@ fun DeckDetailScreen(
         }
     ) { padding ->
 
-        // Bọc LazyColumn bằng PullToRefreshBox
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             state = pullToRefreshState,
@@ -509,8 +511,10 @@ fun DeckDetailScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     val isDefault = weights.isEmpty() ||
-                                            weights == listOf(0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01,
-                                        1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61)
+                                            weights == listOf(
+                                        0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01,
+                                        1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61
+                                    )
                                     Box(
                                         modifier = Modifier
                                             .background(
@@ -584,10 +588,15 @@ fun DeckDetailScreen(
                                                             modifier = Modifier
                                                                 .weight(1f)
                                                                 .background(
-                                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                                    MaterialTheme.colorScheme.primaryContainer.copy(
+                                                                        alpha = 0.5f
+                                                                    ),
                                                                     RoundedCornerShape(8.dp)
                                                                 )
-                                                                .padding(vertical = 6.dp, horizontal = 4.dp),
+                                                                .padding(
+                                                                    vertical = 6.dp,
+                                                                    horizontal = 4.dp
+                                                                ),
                                                             contentAlignment = Alignment.Center
                                                         ) {
                                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -627,9 +636,11 @@ fun DeckDetailScreen(
                     }
                 } else {
                     items(cards) { card ->
-                        Card(modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -646,7 +657,7 @@ fun DeckDetailScreen(
                                         color = Color.DarkGray
                                     )
                                     Row(modifier = Modifier.padding(top = 6.dp)) {
-                                        if (!card.imageUrl.isNullOrEmpty()) {
+                                        if (!card.imageUrl.isNullOrEmpty() && card.imageUrl != "null") {
                                             Text(
                                                 "🖼️ Có ảnh",
                                                 color = MaterialTheme.colorScheme.primary,
@@ -654,7 +665,7 @@ fun DeckDetailScreen(
                                                 modifier = Modifier.padding(end = 8.dp)
                                             )
                                         }
-                                        if (!card.sound.isNullOrEmpty()) {
+                                        if (!card.sound.isNullOrEmpty() && card.sound != "null") {
                                             Text(
                                                 "🎵 Có âm thanh",
                                                 color = Color(0xFF9C27B0),
@@ -697,6 +708,9 @@ fun DeckDetailScreen(
         }
     }
 
+    // ================================================================
+    // DIALOG TẠO THẺ MỚI
+    // ================================================================
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -751,7 +765,7 @@ fun DeckDetailScreen(
                     ) {
                         Icon(Icons.Filled.Image, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (selectedImageUri == null) "Chọn ảnh từ Thư viện" else "Đã đính kèm 1 ảnh")
+                        Text(if (selectedImageUri == null) "Chọn ảnh từ Thư viện" else "✅ Đã đính kèm 1 ảnh")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -771,7 +785,7 @@ fun DeckDetailScreen(
                     ) {
                         Icon(Icons.Filled.Audiotrack, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (selectedSoundUri == null) "Chọn File Âm thanh (MP3)" else "Đã đính kèm 1 file Audio")
+                        Text(if (selectedSoundUri == null) "Chọn File Âm thanh (MP3)" else "✅ Đã đính kèm 1 file Audio")
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -823,17 +837,16 @@ fun DeckDetailScreen(
                 Button(
                     onClick = {
                         if (frontText.isNotBlank() && backText.isNotBlank()) {
-                            val imgUrl = selectedImageUri?.toString()
-                            val soundUrl = selectedSoundUri?.toString()
+                            // ĐÃ FIX: Truyền Uri thật + context thay vì String content://
                             viewModel.addCard(
                                 token = token,
                                 deckId = deck._id,
                                 front = frontText,
                                 back = backText,
                                 type = "TEXT",
-                                imageUrl = imgUrl,
-                                drawData = "CanvasData",
-                                sound = soundUrl
+                                imageUri = selectedImageUri,
+                                soundUri = selectedSoundUri,
+                                context = context
                             ) {
                                 showDialog = false
                                 frontText = ""
@@ -860,6 +873,7 @@ fun DeckDetailScreen(
         )
     }
 
+    // DIALOG CHỈNH SỬA THẺ
     if (editingCard != null) {
         val card = editingCard!!
         AlertDialog(
@@ -889,12 +903,16 @@ fun DeckDetailScreen(
                 Button(
                     onClick = {
                         if (editFrontText.isNotBlank() && editBackText.isNotBlank()) {
+                            // updateCard chỉ sửa text, không đổi file đính kèm
                             viewModel.updateCard(
                                 token = token,
                                 cardId = card._id,
                                 deckId = deck._id,
                                 front = editFrontText,
                                 back = editBackText,
+                                imageUri = null,
+                                soundUri = null,
+                                context = context
                             ) {
                                 editingCard = null
                             }

@@ -1,5 +1,7 @@
 package com.example.n.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.n.BuildConfig
@@ -10,9 +12,32 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 
 class FlashcardViewModel : ViewModel() {
+
+    // ================================================================
+    // HELPER: Chuyển Uri từ máy người dùng thành MultipartBody.Part
+    // để gửi file thật lên S3 thay vì gửi chuỗi content://
+    // ================================================================
+    private fun uriToPart(context: Context, uri: Uri?, fieldName: String): MultipartBody.Part? {
+        if (uri == null) return null
+        return try {
+            val stream = context.contentResolver.openInputStream(uri) ?: return null
+            val bytes = stream.readBytes()
+            stream.close()
+            val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+            val requestBody = bytes.toRequestBody(mimeType.toMediaType())
+            val filename = uri.lastPathSegment ?: "$fieldName.file"
+            MultipartBody.Part.createFormData(fieldName, filename, requestBody)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 
     // 1. TÍNH NĂNG LẬT THẺ (ĐỂ SCREEN CHẠY ĐƯỢC)
     private val _flashcards = MutableStateFlow<List<Flashcard>>(emptyList())
@@ -89,7 +114,6 @@ class FlashcardViewModel : ViewModel() {
                     deckId,
                     UpdateDeckRequest(name = name)
                 )
-                // Update local deck list so HomeScreen reflects the change
                 _decks.value = _decks.value.map {
                     if (it._id == deckId) it.copy(name = response.name) else it
                 }
@@ -107,7 +131,6 @@ class FlashcardViewModel : ViewModel() {
                     deckId,
                     UpdateDeckRequest(algorithm = algorithm)
                 )
-                // Refresh the local deck list with updated algorithm
                 _decks.value = _decks.value.map {
                     if (it._id == deckId) it.copy(algorithm = response.algorithm) else it
                 }
@@ -135,53 +158,72 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
+    // ĐÃ FIX: Nhận Uri thay vì String, upload file thật lên S3
     fun addCard(
         token: String,
         deckId: String,
         front: String,
         back: String,
         type: String,
-        imageUrl: String?,
-        drawData: String?,
-        sound: String? = null,
+        imageUri: Uri?,
+        soundUri: Uri?,
+        context: Context,
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val request = CardRequest(deckId, front, back, type, imageUrl, drawData, sound)
-                val response = RetrofitClient.apiService.createCard("Bearer $token", request)
+
+                val plainType = "text/plain".toMediaType()
+
+                val response = RetrofitClient.apiService.createCard(
+                    token = "Bearer $token",
+                    deckId = deckId.toRequestBody(plainType),
+                    front = front.toRequestBody(plainType),
+                    back = back.toRequestBody(plainType),
+                    type = type.toRequestBody(plainType),
+                    image = uriToPart(context, imageUri, "image"),
+                    sound = uriToPart(context, soundUri, "sound")
+                )
+
                 _cards.value = _cards.value + response
                 onSuccess()
             } catch (e: Exception) {
-                println("Lỗi thêm thẻ pro: ${e.message}")
+                println("Lỗi thêm thẻ: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
+    // ĐÃ FIX: Nhận Uri thay vì String, upload file thật lên S3
     fun updateCard(
         token: String,
         cardId: String,
         deckId: String,
         front: String,
         back: String,
+        imageUri: Uri? = null,
+        soundUri: Uri? = null,
+        context: Context? = null,
         onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
+
+                val plainType = "text/plain".toMediaType()
+
                 val response = RetrofitClient.apiService.updateCard(
-                    "Bearer $token",
-                    cardId,
-                    CardRequest(
-                        deckId = deckId,
-                        front = front,
-                        back = back,
-                    )
+                    token = "Bearer $token",
+                    cardId = cardId,
+                    deckId = deckId.toRequestBody(plainType),
+                    front = front.toRequestBody(plainType),
+                    back = back.toRequestBody(plainType),
+                    image = context?.let { uriToPart(it, imageUri, "image") },
+                    sound = context?.let { uriToPart(it, soundUri, "sound") }
                 )
-                // Update local card list
+
                 _cards.value = _cards.value.map {
                     if (it._id == cardId) response else it
                 }
@@ -206,6 +248,7 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
+    // 4. HỌC THẺ (STUDY)
     private val _studyCards = MutableStateFlow<List<CardResponse>>(emptyList())
     val studyCards: StateFlow<List<CardResponse>> = _studyCards.asStateFlow()
 
@@ -242,24 +285,22 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
-    // 4. TÍNH NĂNG TẠO THẺ THÔNG MINH BẰNG AI (QUICK ADD) - ĐA NGÔN NGỮ
+    // 5. TẠO THẺ THÔNG MINH BẰNG AI (QUICK ADD)
+    // Dùng createCardJson vì AI Quick Add không có file đính kèm
     suspend fun createCardWithAI(token: String, frontText: String): Boolean {
         return try {
             _isLoading.value = true
 
-            // Lấy danh sách Deck nếu đang rỗng
             if (_decks.value.isEmpty()) {
                 val decksResponse = RetrofitClient.apiService.getDecks("Bearer $token")
                 _decks.value = decksResponse
             }
 
-            // Gọi GEMINI AI với API Key đã được bảo mật từ BuildConfig
             val generativeModel = GenerativeModel(
                 modelName = "gemini-2.5-flash",
                 apiKey = BuildConfig.GEMINI_API_KEY
             )
 
-            // Prompt ép AI TỰ ĐỘNG NHẬN DIỆN ngôn ngữ
             val prompt = """
                 Bạn là một chuyên gia ngôn ngữ đa quốc gia. Hãy phân tích từ hoặc cụm từ sau: '$frontText'.
                 Hãy tự động nhận diện ngôn ngữ gốc của từ này (Anh, Nhật, Trung, Hàn, Pháp...) và trả về kết quả tuân thủ NGHIÊM NGẶT định dạng sau, tuyệt đối không thêm lời chào hay giải thích thừa:
@@ -272,7 +313,6 @@ class FlashcardViewModel : ViewModel() {
             val response = generativeModel.generateContent(prompt)
             val backText = response.text?.trim() ?: "Không tìm thấy nghĩa"
 
-            // Tìm hoặc tạo Deck "Hộp Nháp"
             var inboxDeck = _decks.value.find { it.name.equals("Hộp Nháp", ignoreCase = true) }
 
             if (inboxDeck == null) {
@@ -283,21 +323,21 @@ class FlashcardViewModel : ViewModel() {
 
             val deckId = inboxDeck._id
 
-            // Tạo thẻ lưu lên server
-            val request = CardRequest(
-                deckId = deckId,
-                front = frontText,
-                back = backText,
-                type = "text",
-                imageUrl = null,
-                drawData = null,
-                sound = null
+            // Dùng createCardJson (JSON thường) vì AI Quick Add không có file
+            RetrofitClient.apiService.createCardJson(
+                "Bearer $token",
+                CardRequest(
+                    deckId = deckId,
+                    front = frontText,
+                    back = backText,
+                    type = "text",
+                    imageUrl = null,
+                    drawData = null,
+                    sound = null
+                )
             )
-            RetrofitClient.apiService.createCard("Bearer $token", request)
 
-            // Cập nhật giao diện Hộp Nháp
             fetchCards(token, deckId)
-
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -308,6 +348,7 @@ class FlashcardViewModel : ViewModel() {
         }
     }
 
+    // 6. TỐI ƯU HÓA FSRS
     private val _optimizeResult = MutableStateFlow<OptimizeResult?>(null)
     val optimizeResult: StateFlow<OptimizeResult?> = _optimizeResult.asStateFlow()
 
@@ -325,17 +366,13 @@ class FlashcardViewModel : ViewModel() {
             try {
                 _isOptimizing.value = true
                 _optimizeResult.value = null
-                val response = RetrofitClient.apiService.optimizeDeck(
-                    "Bearer $token",
-                    deckId
-                )
+                val response = RetrofitClient.apiService.optimizeDeck("Bearer $token", deckId)
                 _optimizeResult.value = OptimizeResult(
                     success = true,
                     message = response.message,
                     weights = response.new_weights
                 )
             } catch (e: HttpException) {
-                val errorBody = e.response()?.errorBody()?.string()
                 _optimizeResult.value = OptimizeResult(
                     success = false,
                     message = when (e.code()) {
