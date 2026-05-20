@@ -33,6 +33,10 @@ android {
         val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
 
+        // ĐÂY CHÍNH LÀ 2 DÒNG BẠN BỊ THIẾU:
+        val googleClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleClientId\"")
+
         buildConfigField("String", "BASE_URL_DEBUG", "\"http://10.0.2.2:5000/\"")
         buildConfigField("String", "BASE_URL_RELEASE", "\"https://renshuu-backend.onrender.com/\"")
     }
@@ -85,6 +89,7 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Gemini
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")

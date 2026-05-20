@@ -1,17 +1,11 @@
 package com.example.n.viewmodel
 
-import android.content.Context
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.n.network.ForgotPasswordRequest
 import com.example.n.network.LoginRequest
 import com.example.n.network.RegisterRequest
 import com.example.n.network.RetrofitClient
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,16 +21,17 @@ class AuthViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // Biến chứa thông báo thành công (ví dụ: gửi email quên pass thành công)
+    // 1. THÊM HÀM NÀY ĐỂ GIAO DIỆN CÓ THỂ CHỦ ĐỘNG BÁO LỖI
+    fun setError(message: String) {
+        _errorMessage.value = message
+    }
+
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
     private val _loginSuccess = MutableStateFlow(false)
     val loginSuccess: StateFlow<Boolean> = _loginSuccess.asStateFlow()
 
-    // ================================================================
-    // THÊM MỚI QUAN TRỌNG: Biến lưu Token để giao cho MainActivity cất vào Két
-    // ================================================================
     private val _accessToken = MutableStateFlow<String?>(null)
     val accessToken: StateFlow<String?> = _accessToken.asStateFlow()
 
@@ -63,9 +58,7 @@ class AuthViewModel : ViewModel() {
                 val request = LoginRequest(email, pass)
                 val response = RetrofitClient.apiService.loginUser(request)
 
-                // Gán Token lấy được từ Server vào biến
                 _accessToken.value = response.accessToken
-
                 println("Đăng nhập thành công! Token: ${response.accessToken}")
                 _loginSuccess.value = true
             } catch (e: HttpException) {
@@ -100,7 +93,6 @@ class AuthViewModel : ViewModel() {
                 val request = RegisterRequest(email, pass)
                 val response = RetrofitClient.apiService.registerUser(request)
 
-                // Báo thành công và KHÔNG tự động đăng nhập nữa
                 _successMessage.value = "🎉 Đăng ký thành công! Vui lòng đăng nhập để tiếp tục."
 
             } catch (e: HttpException) {
@@ -111,13 +103,11 @@ class AuthViewModel : ViewModel() {
             } catch (e: Exception) {
                 _errorMessage.value = "Lỗi kết nối mạng hoặc server!"
             } finally {
-                // Tắt vòng xoay loading sau khi hoàn tất
                 _isLoading.value = false
             }
         }
     }
 
-    // Tính năng Quên mật khẩu
     fun forgotPassword(email: String) {
         if (email.isBlank()) {
             _errorMessage.value = "Vui lòng nhập email của bạn vào ô trên để reset mật khẩu!"
@@ -143,7 +133,6 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    // Tính năng Đăng xuất
     fun logout() {
         viewModelScope.launch {
             try {
@@ -151,44 +140,28 @@ class AuthViewModel : ViewModel() {
             } catch (e: Exception) {
                 println("Lỗi logout server, tiến hành logout local")
             } finally {
-                _accessToken.value = null // Xóa Token nội bộ
-                _loginSuccess.value = false // Đẩy user ra khỏi màn hình chính
+                _accessToken.value = null
+                _loginSuccess.value = false
             }
         }
     }
 
-    fun loginWithGoogle(context: Context) {
+    // 2. SỬA LẠI HÀM NÀY ĐỂ NHẬN CHUỖI ID TOKEN (THAY VÌ CONTEXT NHƯ BẢN CŨ)
+    fun loginWithGoogle(idToken: String) {
         _isLoading.value = true
         _errorMessage.value = null
 
-        val credentialManager = CredentialManager.create(context)
-        val webClientId = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
-
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(webClientId)
-            .setAutoSelectEnabled(true)
-            .build()
-
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-
         viewModelScope.launch {
             try {
-                val result = credentialManager.getCredential(context, request)
-                val credential = result.credential
+                // Nếu sau này bạn làm API ở Node.js để xác thực tài khoản Google, hãy thay thế bằng đoạn này:
+                // val response = RetrofitClient.apiService.verifyGoogleToken(idToken)
+                // _accessToken.value = response.accessToken
 
-                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                    val idToken = googleIdTokenCredential.idToken
-
-                    _accessToken.value = idToken // Cất Token của Google
-                    println("Lấy Token Google thành công: $idToken")
-                    _loginSuccess.value = true
-                }
+                _accessToken.value = idToken
+                println("Lấy Token Google thành công: $idToken")
+                _loginSuccess.value = true
             } catch (e: Exception) {
-                _errorMessage.value = "Đăng nhập Google bị hủy hoặc thất bại."
+                _errorMessage.value = "Đăng nhập Google thất bại trên Server."
             } finally {
                 _isLoading.value = false
             }

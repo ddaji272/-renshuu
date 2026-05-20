@@ -21,9 +21,16 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.n.BuildConfig
 import com.example.n.R
 import com.example.n.viewmodel.AuthViewModel
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
@@ -41,12 +48,12 @@ fun AuthScreen(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope() // Thêm CoroutineScope cho Google Login
 
     LaunchedEffect(loginSuccess) {
         if (loginSuccess) onLoginSuccess()
     }
 
-    // THÊM: Tự động chuyển qua tab Đăng Nhập nếu Đăng ký thành công
     LaunchedEffect(successMessage) {
         if (successMessage?.contains("Đăng ký thành công") == true) {
             isLoginMode = true
@@ -107,20 +114,18 @@ fun AuthScreen(
             }
         }
 
-        // Báo lỗi (Màu đỏ)
         if (errorMessage != null) {
             Text(text = errorMessage!!, color = Color.Red, modifier = Modifier.padding(top = 8.dp))
         }
 
-        // CẬP NHẬT: Hộp thông báo thành công Đẹp mắt
         if (successMessage != null) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp),
-                color = Color(0xFFE8F5E9), // Nền xanh lá nhạt
+                color = Color(0xFFE8F5E9),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0xFF4CAF50)) // Viền xanh lá đậm
+                border = BorderStroke(1.dp, Color(0xFF4CAF50))
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -174,7 +179,34 @@ fun AuthScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedButton(
-            onClick = { viewModel.loginWithGoogle(context) },
+            onClick = {
+                coroutineScope.launch {
+                    try {
+                        val credentialManager = CredentialManager.create(context)
+                        val googleIdOption = GetGoogleIdOption.Builder()
+                            .setFilterByAuthorizedAccounts(false)
+                            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                            .setAutoSelectEnabled(true)
+                            .build()
+
+                        val request = GetCredentialRequest.Builder()
+                            .addCredentialOption(googleIdOption)
+                            .build()
+
+                        val result = credentialManager.getCredential(context, request)
+                        val credential = result.credential
+
+                        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                            val idToken = googleIdTokenCredential.idToken
+                            viewModel.loginWithGoogle(idToken)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        viewModel.setError("Đăng nhập Google bị hủy hoặc thất bại!")
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(55.dp),
             shape = RoundedCornerShape(12.dp),
             enabled = !isLoading
